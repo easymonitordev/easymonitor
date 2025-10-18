@@ -1,0 +1,6 @@
+# Production Caddyfile with automatic HTTPS
+your-domain.com {
+    route {
+        reverse_proxy nginx:8080
+    }
+}

@@ -1,0 +1,10 @@
+{
+    # Disable automatic HTTPS for local development
+    auto_https off
+}
+
+http://localhost, http://easymonitor.local {
+    route {
+        reverse_proxy nginx:8080
+    }
+}

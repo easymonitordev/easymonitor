@@ -1,0 +1,72 @@
+services:
+    # ────────────────────────── front-end ──────────────────────────
+    caddy:
+        image: caddy:2.8.0-alpine
+        container_name: caddy
+        ports:
+            - "80:80"
+            - "443:443"
+        volumes:
+            - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+            - caddy_data:/data             # ACME certs
+            - caddy_config:/config
+            - ./public:/srv                # static assets
+        networks: [web]
+
+    nginx:
+        image: nginx:alpine
+        container_name: nginx
+        depends_on: [caddy, php]
+        expose:
+            - "8080"
+        volumes:
+            - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+            - ./public:/srv:ro
+        networks: [web, app]
+
+    # ─────────────────────────── PHP / FPM ─────────────────────────
+    php:
+        build: ./docker/php                 # see Dockerfile below
+        container_name: php
+        volumes:
+            - .:/var/www/html
+        environment:
+            APP_ENV: ${APP_ENV:-local}
+            DB_HOST: db
+            DB_DATABASE: ${DB_DATABASE:-easymonitor}
+            DB_USERNAME: ${DB_USERNAME:-easymonitor}
+            DB_PASSWORD: ${DB_PASSWORD:-secret}
+            REDIS_HOST: redis
+        networks: [app]
+        depends_on: [db, redis]
+
+    # ────────────────────────── data layer ─────────────────────────
+    db:
+        image: timescale/timescaledb:latest-pg16  # PG16 + Timescale
+        container_name: db
+        environment:
+            POSTGRES_USER: ${DB_USERNAME:-easymonitor}
+            POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+            POSTGRES_DB: ${DB_DATABASE:-easymonitor}
+        volumes:
+            - db_data:/var/lib/postgresql/data
+            - ./docker/db/init.sh:/docker-entrypoint-initdb.d/999-init.sh:ro
+        networks: [app]
+
+    redis:
+        image: redis:7.2-alpine
+        container_name: redis
+        command: ["redis-server", "--appendonly", "yes"]
+        volumes:
+            - redis_data:/data
+        networks: [app]
+
+networks:
+    web:
+    app:
+
+volumes:
+    db_data:
+    redis_data:
+    caddy_data:
+    caddy_config:
