@@ -52,38 +52,35 @@
                         </div>
 
                         @error('code')
-                            <flux:text color="red">
+                            <div class="text-error text-sm mt-2">
                                 {{ $message }}
-                            </flux:text>
+                            </div>
                         @enderror
                     </div>
 
                     <div x-show="showRecoveryInput">
                         <div class="my-5">
-                            <flux:input
+                            <input
                                 type="text"
                                 name="recovery_code"
                                 x-ref="recovery_code"
                                 x-bind:required="showRecoveryInput"
                                 autocomplete="one-time-code"
                                 x-model="recovery_code"
+                                class="input input-bordered w-full rounded-lg @error('recovery_code') input-error @enderror"
                             />
                         </div>
 
                         @error('recovery_code')
-                            <flux:text color="red">
+                            <div class="text-error text-sm mt-2">
                                 {{ $message }}
-                            </flux:text>
+                            </div>
                         @enderror
                     </div>
 
-                    <flux:button
-                        variant="primary"
-                        type="submit"
-                        class="w-full"
-                    >
+                    <button type="submit" class="btn btn-primary w-full rounded-lg">
                         {{ __('Continue') }}
-                    </flux:button>
+                    </button>
                 </div>
 
                 <div class="mt-5 space-x-0.5 text-sm leading-5 text-center">
