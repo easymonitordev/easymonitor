@@ -6,20 +6,30 @@
 
     <form method="POST" wire:submit="sendPasswordResetLink" class="flex flex-col gap-6">
         <!-- Email Address -->
-        <flux:input
-            wire:model="email"
-            :label="__('Email Address')"
-            type="email"
-            required
-            autofocus
-            placeholder="email@example.com"
-        />
+        <div class="form-control">
+            <label class="label pb-2">
+                <span class="label-text">{{ __('Email Address') }}</span>
+            </label>
+            <input
+                type="email"
+                wire:model="email"
+                required
+                autofocus
+                placeholder="email@example.com"
+                class="input input-bordered w-full rounded-lg @error('email') input-error @enderror"
+            />
+            @error('email')
+                <div class="label">
+                    <span class="label-text-alt text-error">{{ $message }}</span>
+                </div>
+            @enderror
+        </div>
 
-        <flux:button variant="primary" type="submit" class="w-full">{{ __('Email password reset link') }}</flux:button>
+        <button type="submit" class="btn btn-primary w-full rounded-lg">{{ __('Email password reset link') }}</button>
     </form>
 
-    <div class="space-x-1 rtl:space-x-reverse text-center text-sm text-zinc-400">
+    <div class="space-x-1 rtl:space-x-reverse text-center text-sm text-base-content/70">
         <span>{{ __('Or, return to') }}</span>
-        <flux:link :href="route('login')" wire:navigate>{{ __('log in') }}</flux:link>
+        <a href="{{ route('login') }}" wire:navigate class="link link-primary">{{ __('log in') }}</a>
     </div>
 </div>
