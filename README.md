@@ -38,17 +38,37 @@
 * Supervisor inside the PHP image — keeps Horizon / workers alive.
 
 ## 🚀 Quick start (local)
+
+### One-Command Setup
+```bash
+git clone https://github.com/easymonitordev/easymonitor.git
+cd easymonitor
+./setup.sh
+```
+
+The setup script will:
+- Prompt you to create `.env` from `.env.example`
+- Build and start all Docker containers
+- Install dependencies (Composer + NPM)
+- Build frontend assets
+- Run database migrations
+
+**Access your app:** http://localhost
+
+### Manual Setup
 ```bash
 git clone https://github.com/easymonitordev/easymonitor.git
 cd easymonitor
 
-cp .env.example .env          # tweak DB/REDIS passwords if you like
-docker compose up -d --build  # first run: ~3-4 min
+cp .env.example .env                                  # Edit and set DB password
+docker compose up -d --build                          # Start containers (~3-4 min)
+docker exec php bash /var/www/html/docker/scripts/setup.sh  # Setup app
 
-# seed demo checks
-docker compose exec php php artisan migrate --seed
-open http://localhost
+# Optional: seed demo checks
+docker exec php php artisan db:seed
 ```
+
+📖 **For detailed Docker setup instructions, see [DOCKER.md](DOCKER.md)**
 
 ## 🛠 Adding a probe in another region
 
