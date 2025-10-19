@@ -81,4 +81,12 @@ class User extends Authenticatable
             ->withPivot('role')
             ->withTimestamps();
     }
+
+    /**
+     * Get monitors owned by the user
+     */
+    public function monitors(): HasMany
+    {
+        return $this->hasMany(Monitor::class);
+    }
 }

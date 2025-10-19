@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Team extends Model
 {
@@ -81,5 +82,13 @@ class Team extends Model
         $pivot = $this->users()->where('user_id', $user->id)->first()?->pivot;
 
         return $pivot?->role;
+    }
+
+    /**
+     * Get all monitors for the team
+     */
+    public function monitors(): HasMany
+    {
+        return $this->hasMany(Monitor::class);
     }
 }

@@ -1,5 +1,8 @@
 <?php
 
+use App\Livewire\Monitors\Create as MonitorsCreate;
+use App\Livewire\Monitors\Edit as MonitorsEdit;
+use App\Livewire\Monitors\Index as MonitorsIndex;
 use App\Livewire\Settings\Appearance;
 use App\Livewire\Settings\Password;
 use App\Livewire\Settings\Profile;
@@ -42,6 +45,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/create', Create::class)->name('create');
         Route::get('/{team}/edit', Edit::class)->name('edit');
         Route::get('/{team}/members', ManageMembers::class)->name('members');
+    });
+
+    Route::prefix('monitors')->name('monitors.')->group(function () {
+        Route::get('/', MonitorsIndex::class)->name('index');
+        Route::get('/create', MonitorsCreate::class)->name('create');
+        Route::get('/{monitor}/edit', MonitorsEdit::class)->name('edit');
     });
 });
 
