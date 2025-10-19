@@ -4,6 +4,10 @@ use App\Livewire\Settings\Appearance;
 use App\Livewire\Settings\Password;
 use App\Livewire\Settings\Profile;
 use App\Livewire\Settings\TwoFactor;
+use App\Livewire\Teams\Create;
+use App\Livewire\Teams\Edit;
+use App\Livewire\Teams\Index;
+use App\Livewire\Teams\ManageMembers;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
@@ -32,6 +36,13 @@ Route::middleware(['auth'])->group(function () {
             ),
         )
         ->name('two-factor.show');
+
+    Route::prefix('teams')->name('teams.')->group(function () {
+        Route::get('/', Index::class)->name('index');
+        Route::get('/create', Create::class)->name('create');
+        Route::get('/{team}/edit', Edit::class)->name('edit');
+        Route::get('/{team}/members', ManageMembers::class)->name('members');
+    });
 });
 
 require __DIR__.'/auth.php';
