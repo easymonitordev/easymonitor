@@ -31,8 +31,13 @@ class MonitoringServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Only run in console contexts (Horizon, queue workers, artisan)
-        // Skip during unit tests
+        // Skip during unit tests and package discovery
         if (! $this->app->runningInConsole() || $this->app->runningUnitTests()) {
+            return;
+        }
+
+        // Skip during composer package discovery or when app is not bootstrapped
+        if (! $this->app->isBooted()) {
             return;
         }
 
