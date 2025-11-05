@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Monitor extends Model
 {
@@ -25,6 +26,7 @@ class Monitor extends Model
         'status',
         'check_interval',
         'last_checked_at',
+        'next_run_at',
         'last_error',
     ];
 
@@ -38,6 +40,7 @@ class Monitor extends Model
         return [
             'is_active' => 'boolean',
             'last_checked_at' => 'datetime',
+            'next_run_at' => 'datetime',
         ];
     }
 
@@ -79,5 +82,13 @@ class Monitor extends Model
     public function isPending(): bool
     {
         return $this->status === 'pending';
+    }
+
+    /**
+     * Get all check results for this monitor
+     */
+    public function checkResults(): HasMany
+    {
+        return $this->hasMany(CheckResult::class);
     }
 }
