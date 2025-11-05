@@ -1,8 +1,10 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
+use App\Jobs\MonitoringEngine\MonitoringWatchdog;
+use Illuminate\Support\Facades\Schedule;
 
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
+// Watchdog to monitor queue health (runs every minute)
+Schedule::job(new MonitoringWatchdog)->everyMinute();
+
+// Horizon snapshot for metrics (every 5 minutes)
+Schedule::command('horizon:snapshot')->everyFiveMinutes();

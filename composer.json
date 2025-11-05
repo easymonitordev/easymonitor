@@ -12,6 +12,7 @@
         "php": "^8.2",
         "laravel/fortify": "^1.30",
         "laravel/framework": "^12.0",
+        "laravel/horizon": "^5.36",
         "laravel/tinker": "^2.10.1",
         "livewire/livewire": "^3.6"
     },
