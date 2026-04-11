@@ -1,4 +1,4 @@
-<div class="w-full">
+<div class="w-full" wire:poll.30s>
     <div class="mb-6">
         <h2 class="text-2xl font-bold">{{ __('Monitors') }}</h2>
         <p class="text-base-content/70 mt-1">{{ __('Monitor your websites and get notified when they go down') }}</p>
@@ -44,7 +44,7 @@
         <div class="card bg-base-100 border border-base-300">
             <div class="card-body text-center py-12">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-base-content/30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
                 <h3 class="text-lg font-semibold mt-4">{{ __('No monitors yet') }}</h3>
                 <p class="text-base-content/70 mt-2">{{ __('Get started by adding your first website monitor') }}</p>
@@ -56,54 +56,62 @@
             </div>
         </div>
     @else
-        <div class="grid gap-4">
+        <div class="grid gap-3">
             @foreach ($monitors as $monitor)
-                <div class="card bg-base-100 border border-base-300">
-                    <div class="card-body">
-                        <div class="flex items-start justify-between">
-                            <div class="flex-1">
-                                <div class="flex items-center gap-3">
-                                    <h4 class="card-title">{{ $monitor->name }}</h4>
-                                    @if ($monitor->status === 'up')
-                                        <div class="badge badge-success gap-2">
-                                            <div class="w-2 h-2 rounded-full bg-success-content"></div>
-                                            {{ __('Up') }}
-                                        </div>
-                                    @elseif ($monitor->status === 'down')
-                                        <div class="badge badge-error gap-2">
-                                            <div class="w-2 h-2 rounded-full bg-error-content"></div>
-                                            {{ __('Down') }}
-                                        </div>
-                                    @else
-                                        <div class="badge badge-ghost gap-2">
-                                            <div class="w-2 h-2 rounded-full bg-base-content/50"></div>
-                                            {{ __('Pending') }}
-                                        </div>
-                                    @endif
-
-                                    @if (!$monitor->is_active)
-                                        <div class="badge badge-warning">{{ __('Inactive') }}</div>
-                                    @endif
-                                </div>
-
-                                <p class="text-sm text-base-content/70 mt-2">{{ $monitor->url }}</p>
-
-                                <div class="flex gap-4 mt-3 text-sm text-base-content/60">
-                                    <span>{{ __('Check every') }} {{ $monitor->check_interval }}s</span>
-                                    @if ($monitor->last_checked_at)
-                                        <span>{{ __('Last checked') }} {{ $monitor->last_checked_at->diffForHumans() }}</span>
-                                    @endif
-                                </div>
-
-                                @if ($monitor->last_error)
-                                    <div class="alert alert-error mt-3">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        <span class="text-sm">{{ $monitor->last_error }}</span>
-                                    </div>
+                <div class="card bg-base-100 border border-base-300 hover:border-base-content/20 transition-colors" wire:key="monitor-{{ $monitor->id }}">
+                    <div class="card-body p-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-4 flex-1 min-w-0">
+                                <!-- Status indicator -->
+                                @if ($monitor->status === 'up')
+                                    <div class="w-3 h-3 rounded-full bg-success shrink-0" title="{{ __('Up') }}"></div>
+                                @elseif ($monitor->status === 'down')
+                                    <div class="w-3 h-3 rounded-full bg-error animate-pulse shrink-0" title="{{ __('Down') }}"></div>
+                                @else
+                                    <div class="w-3 h-3 rounded-full bg-base-content/30 shrink-0" title="{{ __('Pending') }}"></div>
                                 @endif
+
+                                <!-- Name & URL -->
+                                <a href="{{ route('monitors.show', $monitor) }}" wire:navigate class="flex-1 min-w-0 group">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-semibold group-hover:underline truncate">{{ $monitor->name }}</span>
+                                        @if (!$monitor->is_active)
+                                            <div class="badge badge-warning badge-sm">{{ __('Paused') }}</div>
+                                        @endif
+                                    </div>
+                                    <div class="text-sm text-base-content/50 truncate">{{ $monitor->url }}</div>
+                                </a>
+
+                                <!-- Metrics -->
+                                <div class="hidden sm:flex items-center gap-6 text-sm text-base-content/60 shrink-0">
+                                    @if ($monitor->latestCheckResult?->response_time_ms)
+                                        <div class="text-right">
+                                            <div class="font-medium text-base-content {{ $monitor->latestCheckResult->response_time_ms > 1000 ? 'text-warning' : '' }}">
+                                                {{ $monitor->latestCheckResult->response_time_ms }}ms
+                                            </div>
+                                            <div class="text-xs text-base-content/40">{{ __('response') }}</div>
+                                        </div>
+                                    @endif
+                                    <div class="text-right">
+                                        <div class="font-medium text-base-content">{{ $monitor->check_interval }}s</div>
+                                        <div class="text-xs text-base-content/40">{{ __('interval') }}</div>
+                                    </div>
+                                    @if ($monitor->last_checked_at)
+                                        <div class="text-right w-24">
+                                            <div class="font-medium text-base-content">{{ $monitor->last_checked_at->diffForHumans(short: true) }}</div>
+                                            <div class="text-xs text-base-content/40">{{ __('last check') }}</div>
+                                        </div>
+                                    @endif
+                                </div>
                             </div>
+
+                            @if ($monitor->last_error)
+                                <div class="tooltip tooltip-left shrink-0 mx-2" data-tip="{{ $monitor->last_error }}">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                    </svg>
+                                </div>
+                            @endif
 
                             <div class="dropdown dropdown-end">
                                 <div tabindex="0" role="button" class="btn btn-ghost btn-sm">
@@ -112,6 +120,15 @@
                                     </svg>
                                 </div>
                                 <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow border border-base-300">
+                                    <li>
+                                        <a href="{{ route('monitors.show', $monitor) }}" wire:navigate>
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                            </svg>
+                                            {{ __('View Details') }}
+                                        </a>
+                                    </li>
                                     <li>
                                         <a href="{{ route('monitors.edit', $monitor) }}" wire:navigate>
                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -26,6 +26,8 @@ class MonitorFactory extends Factory
             'check_interval' => 60,
             'last_checked_at' => null,
             'last_error' => null,
+            'consecutive_failures' => 0,
+            'failure_threshold' => 3,
         ];
     }
 

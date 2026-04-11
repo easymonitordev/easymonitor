@@ -21,6 +21,8 @@ class Create extends Component
 
     public bool $isActive = true;
 
+    public int $failureThreshold = 3;
+
     /**
      * Mount the component and authorize access
      */
@@ -42,6 +44,7 @@ class Create extends Component
             'url' => ['required', 'url', 'max:255'],
             'checkInterval' => ['required', 'integer', 'min:30', 'max:3600'],
             'isActive' => ['boolean'],
+            'failureThreshold' => ['required', 'integer', 'min:1', 'max:10'],
         ];
     }
 
@@ -69,6 +72,7 @@ class Create extends Component
             'url' => $validated['url'],
             'check_interval' => $validated['checkInterval'],
             'is_active' => $validated['isActive'],
+            'failure_threshold' => $validated['failureThreshold'],
         ]);
 
         session()->flash('message', __('Monitor created successfully.'));
