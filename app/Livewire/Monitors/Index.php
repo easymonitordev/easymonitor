@@ -59,11 +59,11 @@ class Index extends Component
 
         if ($this->filter === 'my') {
             // Show user's personal monitors (not assigned to a team)
-            $monitors = auth()->user()->monitors()->whereNull('team_id')->latest()->get();
+            $monitors = auth()->user()->monitors()->with('latestCheckResult')->whereNull('team_id')->latest()->get();
         } elseif ($this->filter === 'team' && $this->selectedTeamId) {
             $team = Team::find($this->selectedTeamId);
             if ($team && ($team->isOwner(auth()->user()) || $team->hasUser(auth()->user()))) {
-                $monitors = $team->monitors()->latest()->get();
+                $monitors = $team->monitors()->with('latestCheckResult')->latest()->get();
             }
         }
 

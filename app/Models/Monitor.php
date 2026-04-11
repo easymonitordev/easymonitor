@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Monitor extends Model
 {
@@ -28,6 +29,8 @@ class Monitor extends Model
         'last_checked_at',
         'next_run_at',
         'last_error',
+        'consecutive_failures',
+        'failure_threshold',
     ];
 
     /**
@@ -90,5 +93,13 @@ class Monitor extends Model
     public function checkResults(): HasMany
     {
         return $this->hasMany(CheckResult::class);
+    }
+
+    /**
+     * Get the latest check result for this monitor
+     */
+    public function latestCheckResult(): HasOne
+    {
+        return $this->hasOne(CheckResult::class)->latestOfMany();
     }
 }

@@ -20,6 +20,8 @@ class Edit extends Component
 
     public bool $isActive = true;
 
+    public int $failureThreshold = 3;
+
     /**
      * Mount the component and authorize access
      */
@@ -32,6 +34,7 @@ class Edit extends Component
         $this->url = $monitor->url;
         $this->checkInterval = $monitor->check_interval;
         $this->isActive = $monitor->is_active;
+        $this->failureThreshold = $monitor->failure_threshold ?? 3;
     }
 
     /**
@@ -46,6 +49,7 @@ class Edit extends Component
             'url' => ['required', 'url', 'max:255'],
             'checkInterval' => ['required', 'integer', 'min:30', 'max:3600'],
             'isActive' => ['boolean'],
+            'failureThreshold' => ['required', 'integer', 'min:1', 'max:10'],
         ];
     }
 
@@ -63,6 +67,7 @@ class Edit extends Component
             'url' => $validated['url'],
             'check_interval' => $validated['checkInterval'],
             'is_active' => $validated['isActive'],
+            'failure_threshold' => $validated['failureThreshold'],
         ]);
 
         session()->flash('message', __('Monitor updated successfully.'));

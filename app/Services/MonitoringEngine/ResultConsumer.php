@@ -6,6 +6,8 @@ namespace App\Services\MonitoringEngine;
 
 use App\Models\CheckResult;
 use App\Models\Monitor;
+use App\Notifications\MonitorDown;
+use App\Notifications\MonitorRecovered;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
@@ -112,15 +114,9 @@ class ResultConsumer
     /**
      * Process a single check result
      *
-     * Stores the result in the database and updates the monitor's status.
-     *
-     * Expected fields:
-     * - check_id: Monitor ID
-     * - node: Probe node identifier
-     * - ok: 1 or 0 (up or down)
-     * - ms: Response time in milliseconds
-     * - status_code: HTTP status code (optional)
-     * - error: Error message (optional)
+     * Stores the result in the database, updates the monitor's status
+     * using consecutive failure threshold logic, and sends notifications
+     * on status changes.
      *
      * @param  array<string, string>  $fields
      */
@@ -144,16 +140,89 @@ class ResultConsumer
                 'error_message' => $errorMessage,
             ]);
 
-            // Update monitor status and last_checked_at
+            // Update monitor status with threshold logic
             $monitor = Monitor::find($monitorId);
-            if ($monitor) {
+            if (! $monitor) {
+                return;
+            }
+
+            $previousStatus = $monitor->status;
+
+            if ($isUp) {
+                // Success: reset failures and mark as up
+                $wasDown = $monitor->status === 'down';
+
                 $monitor->update([
-                    'status' => $isUp ? 'up' : 'down',
+                    'status' => 'up',
                     'last_checked_at' => now(),
-                    'last_error' => $isUp ? null : $errorMessage,
+                    'last_error' => null,
+                    'consecutive_failures' => 0,
                 ]);
+
+                // Send recovery notification if was previously down
+                if ($wasDown) {
+                    $this->notifyRecovery($monitor);
+                }
+            } else {
+                // Failure: increment counter, only mark down after threshold
+                $consecutiveFailures = $monitor->consecutive_failures + 1;
+                $threshold = $monitor->failure_threshold ?? 3;
+
+                $newStatus = $consecutiveFailures >= $threshold ? 'down' : $monitor->status;
+
+                $monitor->update([
+                    'status' => $newStatus,
+                    'last_checked_at' => now(),
+                    'last_error' => $errorMessage,
+                    'consecutive_failures' => $consecutiveFailures,
+                ]);
+
+                // Send down notification only when crossing the threshold
+                if ($previousStatus !== 'down' && $newStatus === 'down') {
+                    $this->notifyDown($monitor, $errorMessage);
+                }
             }
         });
+    }
+
+    /**
+     * Send a notification that a monitor is down
+     */
+    private function notifyDown(Monitor $monitor, ?string $errorMessage): void
+    {
+        try {
+            $monitor->user->notify(new MonitorDown($monitor, $errorMessage));
+
+            Log::info('Monitor down notification sent', [
+                'monitor_id' => $monitor->id,
+                'user_id' => $monitor->user_id,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to send monitor down notification', [
+                'monitor_id' => $monitor->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Send a notification that a monitor has recovered
+     */
+    private function notifyRecovery(Monitor $monitor): void
+    {
+        try {
+            $monitor->user->notify(new MonitorRecovered($monitor));
+
+            Log::info('Monitor recovery notification sent', [
+                'monitor_id' => $monitor->id,
+                'user_id' => $monitor->user_id,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to send monitor recovery notification', [
+                'monitor_id' => $monitor->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

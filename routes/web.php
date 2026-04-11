@@ -1,8 +1,10 @@
 <?php
 
+use App\Livewire\Dashboard;
 use App\Livewire\Monitors\Create as MonitorsCreate;
 use App\Livewire\Monitors\Edit as MonitorsEdit;
 use App\Livewire\Monitors\Index as MonitorsIndex;
+use App\Livewire\Monitors\Show as MonitorsShow;
 use App\Livewire\Settings\Appearance;
 use App\Livewire\Settings\Password;
 use App\Livewire\Settings\Profile;
@@ -18,7 +20,7 @@ Route::get('/', function () {
     return view('welcome');
 })->name('home');
 
-Route::view('dashboard', 'dashboard')
+Route::get('dashboard', Dashboard::class)
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
 
@@ -50,6 +52,7 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('monitors')->name('monitors.')->group(function () {
         Route::get('/', MonitorsIndex::class)->name('index');
         Route::get('/create', MonitorsCreate::class)->name('create');
+        Route::get('/{monitor}', MonitorsShow::class)->name('show');
         Route::get('/{monitor}/edit', MonitorsEdit::class)->name('edit');
     });
 });

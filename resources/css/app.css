@@ -46,3 +46,20 @@
         border-color: var(--color-gray-200, currentColor);
     }
 }
+
+/* Round toggle and range slider thumbs */
+.toggle {
+    border-radius: 9999px;
+}
+.toggle::before {
+    border-radius: 9999px;
+}
+.range {
+    border-radius: 9999px;
+}
+.range::-webkit-slider-thumb {
+    border-radius: 9999px;
+}
+.range::-moz-range-thumb {
+    border-radius: 9999px;
+}
