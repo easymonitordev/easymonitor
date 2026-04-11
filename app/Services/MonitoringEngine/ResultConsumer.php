@@ -47,7 +47,7 @@ class ResultConsumer
     public function ensureConsumerGroupExists(): void
     {
         try {
-            Redis::xgroup(
+            Redis::connection('streams')->xgroup(
                 'CREATE',
                 self::STREAM_RESULTS,
                 self::CONSUMER_GROUP,
@@ -76,7 +76,7 @@ class ResultConsumer
         $this->ensureConsumerGroupExists();
 
         // XREADGROUP GROUP result-processors worker-1 BLOCK 5000 COUNT 10 STREAMS results >
-        $results = Redis::xreadgroup(
+        $results = Redis::connection('streams')->xreadgroup(
             self::CONSUMER_GROUP,
             $this->consumerName,
             [self::STREAM_RESULTS => '>'],
@@ -161,7 +161,7 @@ class ResultConsumer
      */
     private function acknowledgeResult(string $entryId): void
     {
-        Redis::xack(self::STREAM_RESULTS, self::CONSUMER_GROUP, [$entryId]);
+        Redis::connection('streams')->xack(self::STREAM_RESULTS, self::CONSUMER_GROUP, [$entryId]);
     }
 
     /**
@@ -170,7 +170,7 @@ class ResultConsumer
     public function getPendingResultCount(): int
     {
         try {
-            $pending = Redis::xpending(self::STREAM_RESULTS, self::CONSUMER_GROUP);
+            $pending = Redis::connection('streams')->xpending(self::STREAM_RESULTS, self::CONSUMER_GROUP);
 
             return (int) ($pending[0] ?? 0);
         } catch (\RedisException) {

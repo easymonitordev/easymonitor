@@ -1,0 +1,10 @@
+bin/
+coverage.out
+coverage.html
+.git
+.gitignore
+*.md
+!README.md
+Makefile
+.env
+.env.*

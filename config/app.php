@@ -56,6 +56,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | JWT Secret
+    |--------------------------------------------------------------------------
+    |
+    | This secret is used for signing JWT tokens for probe node authentication.
+    | Probe nodes use these tokens to authenticate when connecting via Redis Streams.
+    |
+    */
+
+    'jwt_secret' => env('JWT_SECRET'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |
