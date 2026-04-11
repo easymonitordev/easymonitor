@@ -33,9 +33,10 @@ class CheckDispatcher
     /**
      * Create a new CheckDispatcher instance
      */
-    public function __construct(
-        private readonly Redis $redis
-    ) {}
+    public function __construct()
+    {
+        // Use the 'streams' connection which has no prefix
+    }
 
     /**
      * Dispatch all active monitors to the checks stream
@@ -67,7 +68,7 @@ class CheckDispatcher
     public function dispatchCheck(Monitor $monitor): string
     {
         // XADD checks * check_id=42 url=https://... timeout=5000
-        $entryId = Redis::xadd(
+        $entryId = Redis::connection('streams')->xadd(
             self::STREAM_CHECKS,
             '*', // Auto-generate ID
             [
@@ -90,7 +91,7 @@ class CheckDispatcher
     {
         try {
             // XGROUP CREATE checks probes 0 MKSTREAM
-            Redis::xgroup(
+            Redis::connection('streams')->xgroup(
                 'CREATE',
                 self::STREAM_CHECKS,
                 self::CONSUMER_GROUP,
@@ -134,7 +135,7 @@ class CheckDispatcher
     {
         try {
             // XPENDING checks probes
-            $pending = Redis::xpending(self::STREAM_CHECKS, self::CONSUMER_GROUP);
+            $pending = Redis::connection('streams')->xpending(self::STREAM_CHECKS, self::CONSUMER_GROUP);
 
             // Returns [count, start_id, end_id, consumers]
             return (int) ($pending[0] ?? 0);

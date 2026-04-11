@@ -42,8 +42,10 @@ services:
 
     # ────────────────────────── data layer ─────────────────────────
     db:
-        image: timescale/timescaledb:latest-pg16  # PG16 + Timescale
+        image: timescale/timescaledb:latest-pg18  # PG18 + Timescale
         container_name: db
+        ports:
+            - "5432:5432"
         environment:
             POSTGRES_USER: ${DB_USERNAME:-easymonitor}
             POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
@@ -60,6 +62,32 @@ services:
         volumes:
             - redis_data:/data
         networks: [app]
+
+    # ──────────────────────────── probe node ───────────────────────────
+    # The probe node is enabled by default for immediate monitoring capability.
+    # To disable it, use: docker compose up -d --scale probe=0
+    probe:
+        build: ./probe-node
+        container_name: probe
+        environment:
+            NODE_ID: ${PROBE_NODE_ID:-local-node-1}
+            REDIS_URL: ${PROBE_REDIS_URL:-redis://redis:6379/0}
+            REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+            JWT_TOKEN: ${PROBE_JWT_TOKEN:-}
+            DEFAULT_TIMEOUT: 30s
+            BATCH_SIZE: 10
+            MAX_CONCURRENCY: 10
+            HEALTH_CHECK_PORT: 8080
+        depends_on:
+            - redis
+        networks: [app]
+        restart: unless-stopped
+        healthcheck:
+            test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 5s
 
 networks:
     web:

@@ -37,7 +37,7 @@ echo "  ✓ Composer dependencies installed!"
 echo ""
 
 # Generate application key if not exists
-echo "[4/6] Checking application key..."
+echo "[4/8] Checking application key..."
 if grep -q "APP_KEY=$" .env || grep -q "APP_KEY=\"\"" .env; then
     echo "  ⏳ Generating application key..."
     php artisan key:generate --ansi
@@ -47,8 +47,40 @@ else
 fi
 echo ""
 
+# Generate JWT secret for probe nodes if not exists
+echo "[5/8] Checking JWT secret..."
+if grep -q "JWT_SECRET=$" .env || grep -q "JWT_SECRET=\"\"" .env || ! grep -q "^JWT_SECRET=" .env; then
+    echo "  ⏳ Generating JWT secret..."
+    JWT_SECRET=$(openssl rand -base64 32)
+    # Update or add JWT_SECRET to .env
+    if grep -q "^JWT_SECRET=" .env; then
+        sed -i.bak "s|^JWT_SECRET=.*|JWT_SECRET=${JWT_SECRET}|" .env && rm .env.bak
+    else
+        echo "JWT_SECRET=${JWT_SECRET}" >> .env
+    fi
+    echo "  ✓ JWT secret generated!"
+else
+    echo "  ✓ JWT secret already exists!"
+fi
+echo ""
+
+# Generate probe node JWT token if not exists
+echo "[6/8] Checking probe node token..."
+if grep -q "PROBE_JWT_TOKEN=$" .env || grep -q "PROBE_JWT_TOKEN=\"\"" .env || ! grep -q "^PROBE_JWT_TOKEN=" .env; then
+    echo "  ⏳ Generating probe node token..."
+    # Use the artisan command to generate the token
+    php artisan probe:generate-token \
+        --node-id="${PROBE_NODE_ID:-local-node-1}" \
+        --expires=365 \
+        --no-interaction 2>/dev/null || true
+    echo "  ✓ Probe node token generated!"
+else
+    echo "  ✓ Probe node token already exists!"
+fi
+echo ""
+
 # Install NPM dependencies and build assets
-echo "[5/6] Installing NPM dependencies and building assets..."
+echo "[7/8] Installing NPM dependencies and building assets..."
 if [ ! -d "node_modules" ]; then
     echo "  ⏳ Running: npm install"
     npm install
@@ -59,7 +91,7 @@ echo "  ✓ Assets built successfully!"
 echo ""
 
 # Run database migrations
-echo "[6/6] Running database migrations..."
+echo "[8/8] Running database migrations..."
 php artisan migrate --force --no-interaction
 echo "  ✓ Migrations completed!"
 echo ""

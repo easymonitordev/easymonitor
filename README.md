@@ -39,21 +39,25 @@
 
 ## 🚀 Quick start (local)
 
-### One-Command Setup
+### One-Command Setup (Recommended)
 ```bash
 git clone https://github.com/easymonitordev/easymonitor.git
 cd easymonitor
 ./setup.sh
 ```
 
-The setup script will:
-- Prompt you to create `.env` from `.env.example`
-- Build and start all Docker containers
-- Install dependencies (Composer + NPM)
-- Build frontend assets
-- Run database migrations
+The setup script will automatically:
+- ✅ Create `.env` from `.env.example` (if needed)
+- ✅ Generate application key
+- ✅ **Generate JWT secret and probe token** (NEW!)
+- ✅ Build and start all Docker containers (including local probe)
+- ✅ Install dependencies (Composer + NPM)
+- ✅ Build frontend assets
+- ✅ Run database migrations
 
-**Access your app:** http://localhost
+**That's it!** Your monitoring system is ready at: **http://localhost**
+
+The local probe node starts automatically and begins monitoring your checks immediately.
 
 ### Manual Setup
 ```bash
@@ -61,24 +65,42 @@ git clone https://github.com/easymonitordev/easymonitor.git
 cd easymonitor
 
 cp .env.example .env                                  # Edit and set DB password
-docker compose up -d --build                          # Start containers (~3-4 min)
+docker compose up -d --build                          # Start all containers (~3-4 min)
 docker exec php bash /var/www/html/docker/scripts/setup.sh  # Setup app
 
 # Optional: seed demo checks
 docker exec php php artisan db:seed
 ```
 
-📖 **For detailed Docker setup instructions, see [DOCKER.md](DOCKER.md)**
+**Note:** The local probe is enabled by default. To disable it (e.g., on tiny VPSes):
+```bash
+docker compose up -d --scale probe=0
+```
+
+📖 **For detailed setup instructions, see [PROBE_NODE_SETUP.md](PROBE_NODE_SETUP.md)**
 
 ## 🛠 Adding a probe in another region
 
+### 1. Generate a token on your server:
+```bash
+docker exec php php artisan probe:generate-token \
+  --node-id=us-east-1 \
+  --tags=us-east-1,production
+```
+
+### 2. Deploy the probe on a remote server:
 ```bash
 docker run -d --restart=unless-stopped \
-  -e REDIS_URL="rediss://probe:<token>@your-domain.com:6380" \
-  -e NODE_ID="ams-1" \
+  -e NODE_ID="us-east-1" \
+  -e REDIS_URL="rediss://your-redis-host.com:6380/0" \
+  -e REDIS_PASSWORD="your-redis-password" \
+  -e JWT_TOKEN="<token-from-step-1>" \
   easymonitor/probe-node:latest
 ```
-The probe auto-registers via JWT and starts sending results within ~5 sec.
+
+The probe authenticates via JWT and starts monitoring within ~5 seconds.
+
+📖 **For external probe deployment, see [PROBE_NODE_SETUP.md](PROBE_NODE_SETUP.md)**
 
 ## 🤝 Contributing
 * Fork the repo & create your branch.
