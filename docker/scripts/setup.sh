@@ -96,6 +96,12 @@ php artisan migrate --force --no-interaction
 echo "  ✓ Migrations completed!"
 echo ""
 
+# Create storage symlink (for status page logos and other public uploads)
+echo "[9/8] Creating storage symlink..."
+php artisan storage:link 2>/dev/null || true
+echo "  ✓ Storage symlink ready!"
+echo ""
+
 echo "======================================"
 echo "✓ Setup completed successfully!"
 echo "======================================"

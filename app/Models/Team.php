@@ -99,4 +99,12 @@ class Team extends Model
     {
         return $this->hasMany(Project::class);
     }
+
+    /**
+     * Get status pages for the team
+     */
+    public function statusPages(): HasMany
+    {
+        return $this->hasMany(StatusPage::class);
+    }
 }

@@ -97,4 +97,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(Project::class);
     }
+
+    /**
+     * Get status pages owned by the user
+     */
+    public function statusPages(): HasMany
+    {
+        return $this->hasMany(StatusPage::class);
+    }
 }

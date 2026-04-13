@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\PublicStatusPageController;
 use App\Livewire\Dashboard;
 use App\Livewire\Monitors\Create as MonitorsCreate;
 use App\Livewire\Monitors\Edit as MonitorsEdit;
@@ -13,6 +14,11 @@ use App\Livewire\Settings\Appearance;
 use App\Livewire\Settings\Password;
 use App\Livewire\Settings\Profile;
 use App\Livewire\Settings\TwoFactor;
+use App\Livewire\StatusPages\Create as StatusPagesCreate;
+use App\Livewire\StatusPages\Incidents\Create as StatusPageIncidentCreate;
+use App\Livewire\StatusPages\Incidents\Edit as StatusPageIncidentEdit;
+use App\Livewire\StatusPages\Index as StatusPagesIndex;
+use App\Livewire\StatusPages\Manage as StatusPagesManage;
 use App\Livewire\Teams\Create;
 use App\Livewire\Teams\Edit;
 use App\Livewire\Teams\Index;
@@ -20,9 +26,23 @@ use App\Livewire\Teams\ManageMembers;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
-Route::get('/', function () {
+// Caddy on-demand TLS ask endpoint
+Route::get('/caddy/ask', [PublicStatusPageController::class, 'caddyAsk'])->name('caddy.ask');
+
+// Home — if Host matches a verified custom_domain, render the status page;
+// otherwise show the welcome page.
+Route::get('/', function (\Illuminate\Http\Request $request) {
+    $host = strtolower($request->getHost());
+
+    if (\App\Models\StatusPage::where('custom_domain', $host)->whereNotNull('domain_verified_at')->exists()) {
+        return app(PublicStatusPageController::class)->showByDomain($request);
+    }
+
     return view('welcome');
 })->name('home');
+
+// Public status page (unauthenticated, slug-based)
+Route::get('/status/{slug}', [PublicStatusPageController::class, 'show'])->name('public.status');
 
 Route::get('dashboard', Dashboard::class)
     ->middleware(['auth', 'verified'])
@@ -58,6 +78,14 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/create', ProjectsCreate::class)->name('create');
         Route::get('/{project}', ProjectsShow::class)->name('show');
         Route::get('/{project}/edit', ProjectsEdit::class)->name('edit');
+    });
+
+    Route::prefix('status-pages')->name('status-pages.')->group(function () {
+        Route::get('/', StatusPagesIndex::class)->name('index');
+        Route::get('/create', StatusPagesCreate::class)->name('create');
+        Route::get('/{statusPage}', StatusPagesManage::class)->name('manage');
+        Route::get('/{statusPage}/incidents/create', StatusPageIncidentCreate::class)->name('incidents.create');
+        Route::get('/{statusPage}/incidents/{incident}/edit', StatusPageIncidentEdit::class)->name('incidents.edit');
     });
 
     Route::prefix('monitors')->name('monitors.')->group(function () {

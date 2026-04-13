@@ -94,6 +94,16 @@
                                 </a>
                             </li>
                             <li>
+                                <a href="{{ route('status-pages.index') }}"
+                                   class="@if(request()->routeIs('status-pages.*')) menu-active @endif"
+                                   wire:navigate>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2a4 4 0 014-4h6m0 0l-3-3m3 3l-3 3m-9 4H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v6" />
+                                    </svg>
+                                    {{ __('Status Pages') }}
+                                </a>
+                            </li>
+                            <li>
                                 <a href="{{ route('teams.index') }}"
                                    class="@if(request()->routeIs('teams.*')) menu-active @endif"
                                    wire:navigate>
