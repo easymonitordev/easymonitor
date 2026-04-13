@@ -118,7 +118,7 @@ test('team owner can edit monitor', function () {
         ->set('name', 'Updated Name')
         ->set('url', 'https://updated.com')
         ->call('save')
-        ->assertRedirect(route('monitors.index'));
+        ->assertRedirect(route('monitors.show', $monitor));
 
     $this->assertDatabaseHas('monitors', [
         'id' => $monitor->id,
@@ -139,7 +139,7 @@ test('team admin can edit monitor', function () {
     Livewire::test(Edit::class, ['monitor' => $monitor])
         ->set('name', 'Updated by Admin')
         ->call('save')
-        ->assertRedirect(route('monitors.index'));
+        ->assertRedirect(route('monitors.show', $monitor));
 
     $this->assertDatabaseHas('monitors', [
         'id' => $monitor->id,

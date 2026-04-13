@@ -5,6 +5,10 @@ use App\Livewire\Monitors\Create as MonitorsCreate;
 use App\Livewire\Monitors\Edit as MonitorsEdit;
 use App\Livewire\Monitors\Index as MonitorsIndex;
 use App\Livewire\Monitors\Show as MonitorsShow;
+use App\Livewire\Projects\Create as ProjectsCreate;
+use App\Livewire\Projects\Edit as ProjectsEdit;
+use App\Livewire\Projects\Index as ProjectsIndex;
+use App\Livewire\Projects\Show as ProjectsShow;
 use App\Livewire\Settings\Appearance;
 use App\Livewire\Settings\Password;
 use App\Livewire\Settings\Profile;
@@ -47,6 +51,13 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/create', Create::class)->name('create');
         Route::get('/{team}/edit', Edit::class)->name('edit');
         Route::get('/{team}/members', ManageMembers::class)->name('members');
+    });
+
+    Route::prefix('projects')->name('projects.')->group(function () {
+        Route::get('/', ProjectsIndex::class)->name('index');
+        Route::get('/create', ProjectsCreate::class)->name('create');
+        Route::get('/{project}', ProjectsShow::class)->name('show');
+        Route::get('/{project}/edit', ProjectsEdit::class)->name('edit');
     });
 
     Route::prefix('monitors')->name('monitors.')->group(function () {

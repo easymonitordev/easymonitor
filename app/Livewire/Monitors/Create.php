@@ -3,8 +3,10 @@
 namespace App\Livewire\Monitors;
 
 use App\Models\Monitor;
+use App\Models\Project;
 use App\Models\Team;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 class Create extends Component
@@ -12,6 +14,9 @@ class Create extends Component
     use AuthorizesRequests;
 
     public ?int $teamId = null;
+
+    #[Url]
+    public ?int $projectId = null;
 
     public string $name = '';
 
@@ -40,6 +45,7 @@ class Create extends Component
     {
         return [
             'teamId' => ['nullable', 'exists:teams,id'],
+            'projectId' => ['nullable', 'exists:projects,id'],
             'name' => ['required', 'string', 'max:255'],
             'url' => ['required', 'url', 'max:255'],
             'checkInterval' => ['required', 'integer', 'min:30', 'max:3600'],
@@ -65,9 +71,20 @@ class Create extends Component
             }
         }
 
+        // Verify user has access to selected project
+        if ($validated['projectId']) {
+            $project = Project::findOrFail($validated['projectId']);
+            if (! auth()->user()->can('view', $project)) {
+                abort(403);
+            }
+            // Project ownership governs — ignore team_id when inside a project
+            $validated['teamId'] = null;
+        }
+
         Monitor::create([
             'user_id' => auth()->id(),
             'team_id' => $validated['teamId'],
+            'project_id' => $validated['projectId'],
             'name' => $validated['name'],
             'url' => $validated['url'],
             'check_interval' => $validated['checkInterval'],
@@ -85,11 +102,22 @@ class Create extends Component
      */
     public function render()
     {
-        $teams = auth()->user()->ownedTeams
-            ->merge(auth()->user()->teams);
+        $user = auth()->user();
+        $teams = $user->ownedTeams->merge($user->teams);
+
+        // Projects the user can view
+        $teamIds = $teams->pluck('id');
+        $projects = Project::query()
+            ->where(function ($query) use ($user, $teamIds) {
+                $query->where('user_id', $user->id)
+                    ->orWhereIn('team_id', $teamIds);
+            })
+            ->orderBy('name')
+            ->get();
 
         return view('livewire.monitors.create', [
             'teams' => $teams,
+            'projects' => $projects,
         ]);
     }
 }

@@ -91,4 +91,12 @@ class Team extends Model
     {
         return $this->hasMany(Monitor::class);
     }
+
+    /**
+     * Get all projects for the team
+     */
+    public function projects(): HasMany
+    {
+        return $this->hasMany(Project::class);
+    }
 }

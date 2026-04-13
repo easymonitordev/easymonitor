@@ -25,6 +25,14 @@
                         {{ __('Pending') }}
                     </div>
                 @endif
+                @if ($monitor->project)
+                    <a href="{{ route('projects.show', $monitor->project) }}" wire:navigate class="badge badge-ghost gap-1 hover:badge-neutral">
+                        @if ($monitor->project->color)
+                            <div class="w-1.5 h-1.5 rounded-full" style="background: {{ $monitor->project->color }}"></div>
+                        @endif
+                        {{ $monitor->project->name }}
+                    </a>
+                @endif
             </div>
             <p class="text-sm text-base-content/70 mt-1 ml-12">{{ $monitor->url }}</p>
         </div>

@@ -89,4 +89,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(Monitor::class);
     }
+
+    /**
+     * Get projects owned by the user
+     */
+    public function projects(): HasMany
+    {
+        return $this->hasMany(Project::class);
+    }
 }

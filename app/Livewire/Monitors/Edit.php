@@ -3,6 +3,7 @@
 namespace App\Livewire\Monitors;
 
 use App\Models\Monitor;
+use App\Models\Project;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Livewire\Component;
 
@@ -11,6 +12,8 @@ class Edit extends Component
     use AuthorizesRequests;
 
     public Monitor $monitor;
+
+    public ?int $projectId = null;
 
     public string $name = '';
 
@@ -30,6 +33,7 @@ class Edit extends Component
         $this->authorize('update', $monitor);
 
         $this->monitor = $monitor;
+        $this->projectId = $monitor->project_id;
         $this->name = $monitor->name;
         $this->url = $monitor->url;
         $this->checkInterval = $monitor->check_interval;
@@ -45,6 +49,7 @@ class Edit extends Component
     public function rules(): array
     {
         return [
+            'projectId' => ['nullable', 'exists:projects,id'],
             'name' => ['required', 'string', 'max:255'],
             'url' => ['required', 'url', 'max:255'],
             'checkInterval' => ['required', 'integer', 'min:30', 'max:3600'],
@@ -62,7 +67,17 @@ class Edit extends Component
 
         $validated = $this->validate();
 
+        // If assigning to a project, verify access and clear team_id
+        if ($validated['projectId']) {
+            $project = Project::findOrFail($validated['projectId']);
+            if (! auth()->user()->can('view', $project)) {
+                abort(403);
+            }
+        }
+
         $this->monitor->update([
+            'project_id' => $validated['projectId'],
+            'team_id' => $validated['projectId'] ? null : $this->monitor->team_id,
             'name' => $validated['name'],
             'url' => $validated['url'],
             'check_interval' => $validated['checkInterval'],
@@ -72,7 +87,7 @@ class Edit extends Component
 
         session()->flash('message', __('Monitor updated successfully.'));
 
-        $this->redirect(route('monitors.index'), navigate: true);
+        $this->redirect(route('monitors.show', $this->monitor), navigate: true);
     }
 
     /**
@@ -80,6 +95,20 @@ class Edit extends Component
      */
     public function render()
     {
-        return view('livewire.monitors.edit');
+        $user = auth()->user();
+        $teams = $user->ownedTeams->merge($user->teams);
+        $teamIds = $teams->pluck('id');
+
+        $projects = Project::query()
+            ->where(function ($query) use ($user, $teamIds) {
+                $query->where('user_id', $user->id)
+                    ->orWhereIn('team_id', $teamIds);
+            })
+            ->orderBy('name')
+            ->get();
+
+        return view('livewire.monitors.edit', [
+            'projects' => $projects,
+        ]);
     }
 }
