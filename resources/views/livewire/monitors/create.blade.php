@@ -136,8 +136,37 @@
             </div>
         </div>
 
-        <!-- Team Assignment -->
-        @if ($teams->count() > 0)
+        <!-- Organization -->
+        <div class="card bg-base-100 border border-base-300 mb-4">
+            <div class="card-body gap-5">
+                <h3 class="text-sm font-semibold uppercase tracking-wider text-base-content/50">{{ __('Organization') }}</h3>
+
+                <div class="form-control">
+                    <label class="label pb-1">
+                        <span class="label-text font-medium">{{ __('Project') }}</span>
+                        <span class="label-text-alt text-base-content/50">{{ __('Optional') }}</span>
+                    </label>
+                    <select wire:model.live="projectId" class="select select-bordered w-full rounded-lg @error('projectId') select-error @enderror">
+                        <option value="">{{ __('No project — standalone monitor') }}</option>
+                        @foreach ($projects as $project)
+                            <option value="{{ $project->id }}">{{ $project->name }}{{ $project->team_id ? ' (' . ($project->team?->name ?? 'team') . ')' : '' }}</option>
+                        @endforeach
+                    </select>
+                    <div class="label pb-0">
+                        <span class="label-text-alt text-base-content/50">
+                            @if ($projectId)
+                                {{ __('Ownership inherits from the project (team or owner).') }}
+                            @else
+                                <a href="{{ route('projects.create') }}" wire:navigate class="link link-primary">{{ __('Create a new project') }}</a>
+                            @endif
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Team Assignment (only when no project) -->
+        @if ($teams->count() > 0 && !$projectId)
             <div class="card bg-base-100 border border-base-300 mb-4">
                 <div class="card-body gap-5">
                     <h3 class="text-sm font-semibold uppercase tracking-wider text-base-content/50">{{ __('Ownership') }}</h3>

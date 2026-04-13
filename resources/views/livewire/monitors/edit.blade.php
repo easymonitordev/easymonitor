@@ -122,6 +122,22 @@
                 </div>
 
                 <div class="form-control">
+                    <label class="label pb-1">
+                        <span class="label-text font-medium">{{ __('Project') }}</span>
+                        <span class="label-text-alt text-base-content/50">{{ __('Optional') }}</span>
+                    </label>
+                    <select wire:model="projectId" class="select select-bordered w-full rounded-lg @error('projectId') select-error @enderror">
+                        <option value="">{{ __('No project — standalone monitor') }}</option>
+                        @foreach ($projects as $project)
+                            <option value="{{ $project->id }}">{{ $project->name }}{{ $project->team_id ? ' (' . ($project->team?->name ?? 'team') . ')' : '' }}</option>
+                        @endforeach
+                    </select>
+                    <div class="label pb-0">
+                        <span class="label-text-alt text-base-content/50">{{ __('When inside a project, team access is inherited from the project.') }}</span>
+                    </div>
+                </div>
+
+                <div class="form-control">
                     <label class="label cursor-pointer justify-start gap-4 py-3">
                         <input type="checkbox" wire:model="isActive" class="toggle toggle-success" />
                         <div>

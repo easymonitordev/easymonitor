@@ -17,18 +17,19 @@ class MonitorPolicy
 
     /**
      * Determine whether the user can view the model.
+     *
+     * Access follows the effective team: if monitor is inside a project,
+     * the project's team governs; otherwise the monitor's team_id.
      */
     public function view(User $user, Monitor $monitor): bool
     {
-        // User can view their own monitors
-        if ($monitor->user_id === $user->id) {
+        if ($monitor->effectiveUserId() === $user->id) {
             return true;
         }
 
-        // User can view team monitors if they're part of the team
-        if ($monitor->team_id) {
-            $team = $monitor->team;
+        $team = $monitor->effectiveTeam();
 
+        if ($team) {
             return $team->isOwner($user) || $team->hasUser($user);
         }
 
@@ -45,20 +46,19 @@ class MonitorPolicy
 
     /**
      * Determine whether the user can update the model.
+     *
+     * Only the effective owner, or team owner/admin on the effective team.
      */
     public function update(User $user, Monitor $monitor): bool
     {
-        // User can update their own monitors
-        if ($monitor->user_id === $user->id) {
+        if ($monitor->effectiveUserId() === $user->id) {
             return true;
         }
 
-        // For team monitors, only owner and admins can update
-        if ($monitor->team_id) {
-            $team = $monitor->team;
-            $role = $team->userRole($user);
+        $team = $monitor->effectiveTeam();
 
-            return $team->isOwner($user) || $role === 'admin';
+        if ($team) {
+            return $team->isOwner($user) || $team->userRole($user) === 'admin';
         }
 
         return false;
@@ -69,20 +69,7 @@ class MonitorPolicy
      */
     public function delete(User $user, Monitor $monitor): bool
     {
-        // User can delete their own monitors
-        if ($monitor->user_id === $user->id) {
-            return true;
-        }
-
-        // For team monitors, only owner and admins can delete
-        if ($monitor->team_id) {
-            $team = $monitor->team;
-            $role = $team->userRole($user);
-
-            return $team->isOwner($user) || $role === 'admin';
-        }
-
-        return false;
+        return $this->update($user, $monitor);
     }
 
     /**

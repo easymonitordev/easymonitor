@@ -52,18 +52,34 @@ class Index extends Component
      */
     public function render()
     {
-        $teams = auth()->user()->ownedTeams
-            ->merge(auth()->user()->teams);
+        $user = auth()->user();
+        $teams = $user->ownedTeams->merge($user->teams);
 
         $monitors = collect();
 
         if ($this->filter === 'my') {
-            // Show user's personal monitors (not assigned to a team)
-            $monitors = auth()->user()->monitors()->with('latestCheckResult')->whereNull('team_id')->latest()->get();
+            // Personal monitors: user's own, no team_id, and either no project or a personal project
+            $monitors = $user->monitors()
+                ->with(['latestCheckResult', 'project'])
+                ->whereNull('team_id')
+                ->where(function ($query) {
+                    $query->whereNull('project_id')
+                        ->orWhereHas('project', fn ($q) => $q->whereNull('team_id'));
+                })
+                ->latest()
+                ->get();
         } elseif ($this->filter === 'team' && $this->selectedTeamId) {
             $team = Team::find($this->selectedTeamId);
-            if ($team && ($team->isOwner(auth()->user()) || $team->hasUser(auth()->user()))) {
-                $monitors = $team->monitors()->with('latestCheckResult')->latest()->get();
+            if ($team && ($team->isOwner($user) || $team->hasUser($user))) {
+                // Team monitors: either directly assigned team_id, or inside a project owned by this team
+                $monitors = Monitor::query()
+                    ->with(['latestCheckResult', 'project'])
+                    ->where(function ($query) use ($team) {
+                        $query->where('team_id', $team->id)
+                            ->orWhereHas('project', fn ($q) => $q->where('team_id', $team->id));
+                    })
+                    ->latest()
+                    ->get();
             }
         }
 

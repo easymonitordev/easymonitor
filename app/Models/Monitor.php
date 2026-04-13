@@ -21,6 +21,7 @@ class Monitor extends Model
     protected $fillable = [
         'user_id',
         'team_id',
+        'project_id',
         'name',
         'url',
         'is_active',
@@ -61,6 +62,43 @@ class Monitor extends Model
     public function team(): BelongsTo
     {
         return $this->belongsTo(Team::class);
+    }
+
+    /**
+     * Get the project this monitor belongs to (optional)
+     */
+    public function project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class);
+    }
+
+    /**
+     * Return the effective team for access control.
+     *
+     * When a monitor is inside a project, the project's team wins over
+     * the monitor's own team_id. Standalone monitors fall back to team_id.
+     */
+    public function effectiveTeam(): ?Team
+    {
+        if ($this->project_id) {
+            return $this->project?->team;
+        }
+
+        return $this->team;
+    }
+
+    /**
+     * Return the effective owner user_id for access control.
+     *
+     * When a monitor is inside a project, the project owner governs.
+     */
+    public function effectiveUserId(): int
+    {
+        if ($this->project_id && $this->project) {
+            return $this->project->user_id;
+        }
+
+        return $this->user_id;
     }
 
     /**

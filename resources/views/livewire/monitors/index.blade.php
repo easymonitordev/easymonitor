@@ -75,6 +75,14 @@
                                 <a href="{{ route('monitors.show', $monitor) }}" wire:navigate class="flex-1 min-w-0 group">
                                     <div class="flex items-center gap-2">
                                         <span class="font-semibold group-hover:underline truncate">{{ $monitor->name }}</span>
+                                        @if ($monitor->project)
+                                            <span class="badge badge-ghost badge-sm gap-1">
+                                                @if ($monitor->project->color)
+                                                    <div class="w-1.5 h-1.5 rounded-full" style="background: {{ $monitor->project->color }}"></div>
+                                                @endif
+                                                {{ $monitor->project->name }}
+                                            </span>
+                                        @endif
                                         @if (!$monitor->is_active)
                                             <div class="badge badge-warning badge-sm">{{ __('Paused') }}</div>
                                         @endif
