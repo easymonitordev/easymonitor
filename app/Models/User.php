@@ -53,6 +53,23 @@ class User extends Authenticatable
     }
 
     /**
+     * Determine whether new account registration is currently allowed.
+     *
+     * Registration is allowed when:
+     * - the auth.registration_enabled config flag is true, OR
+     * - there are zero users in the database (the first user — usually the
+     *   operator setting up the app — can always register)
+     */
+    public static function registrationAllowed(): bool
+    {
+        if (config('auth.registration_enabled', false)) {
+            return true;
+        }
+
+        return self::query()->count() === 0;
+    }
+
+    /**
      * Get the user's initials
      */
     public function initials(): string

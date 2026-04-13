@@ -68,7 +68,7 @@
         </div>
     </form>
 
-    @if (Route::has('register'))
+    @if (Route::has('register') && \App\Models\User::registrationAllowed())
         <div class="text-center text-sm">
             <span class="text-base-content/70">{{ __('Don\'t have an account?') }}</span>
             <a href="{{ route('register') }}" wire:navigate class="link link-primary">{{ __('Sign up') }}</a>

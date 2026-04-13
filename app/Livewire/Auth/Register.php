@@ -23,10 +23,25 @@ class Register extends Component
     public string $password_confirmation = '';
 
     /**
+     * Reject access to the register page when registration is disabled.
+     */
+    public function mount(): void
+    {
+        if (! User::registrationAllowed()) {
+            abort(404);
+        }
+    }
+
+    /**
      * Handle an incoming registration request.
      */
     public function register(): void
     {
+        // Re-check at submit time to prevent race / direct-action abuse.
+        if (! User::registrationAllowed()) {
+            abort(404);
+        }
+
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
