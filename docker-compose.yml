@@ -1,7 +1,7 @@
 services:
     # ────────────────────────── front-end ──────────────────────────
     caddy:
-        image: caddy:2.8.0-alpine
+        image: caddy:2.10.0-alpine
         container_name: caddy
         ports:
             - "80:80"
@@ -14,7 +14,7 @@ services:
         networks: [web]
 
     nginx:
-        image: nginx:alpine
+        image: nginx:1.28.3-alpine
         container_name: nginx
         depends_on: [caddy, php]
         expose:
@@ -42,7 +42,7 @@ services:
 
     # ────────────────────────── data layer ─────────────────────────
     db:
-        image: timescale/timescaledb:latest-pg18  # PG18 + Timescale
+        image: timescale/timescaledb:2.26.0-pg18  # PG18 + Timescale 2.26.0
         container_name: db
         ports:
             - "5432:5432"
@@ -56,7 +56,7 @@ services:
         networks: [app]
 
     redis:
-        image: redis:7.2-alpine
+        image: redis:7.4-alpine
         container_name: redis
         command: ["redis-server", "--appendonly", "yes"]
         volumes:
