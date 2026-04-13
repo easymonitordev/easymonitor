@@ -96,33 +96,6 @@
 
                 <div class="form-control">
                     <label class="label pb-1">
-                        <span class="label-text font-medium">{{ __('Failure Threshold') }}</span>
-                    </label>
-                    <div class="flex items-center gap-4">
-                        <input
-                            type="range"
-                            wire:model.live="failureThreshold"
-                            min="1"
-                            max="10"
-                            step="1"
-                            class="range range-sm range-primary flex-1"
-                        />
-                        <div class="badge badge-lg font-mono min-w-20 justify-center rounded-lg">
-                            {{ $failureThreshold }} {{ trans_choice('fail|fails', $failureThreshold) }}
-                        </div>
-                    </div>
-                    <div class="label pb-0">
-                        <span class="label-text-alt text-base-content/50">{{ __('Number of consecutive failures before marking as down and alerting') }}</span>
-                    </div>
-                    @error('failureThreshold')
-                        <div class="label pb-0">
-                            <span class="label-text-alt text-error">{{ $message }}</span>
-                        </div>
-                    @enderror
-                </div>
-
-                <div class="form-control">
-                    <label class="label pb-1">
                         <span class="label-text font-medium">{{ __('Project') }}</span>
                         <span class="label-text-alt text-base-content/50">{{ __('Optional') }}</span>
                     </label>
@@ -145,6 +118,52 @@
                             <p class="text-xs text-base-content/50 mt-0.5">{{ __('Pause or resume checks for this monitor') }}</p>
                         </div>
                     </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Advanced (collapsed by default) -->
+        <div class="collapse collapse-arrow bg-base-100 border border-base-300 mb-4">
+            <input type="checkbox" />
+            <div class="collapse-title text-sm font-semibold uppercase tracking-wider text-base-content/50">
+                {{ __('Advanced') }}
+            </div>
+            <div class="collapse-content">
+                <div class="form-control pt-2">
+                    <label class="label pb-1">
+                        <span class="label-text font-medium">{{ __('Confirm before alerting') }}</span>
+                    </label>
+                    <div class="flex items-center gap-4">
+                        <input
+                            type="range"
+                            wire:model.live="failureThreshold"
+                            min="1"
+                            max="10"
+                            step="1"
+                            class="range range-sm range-primary flex-1"
+                        />
+                        <div class="badge badge-lg font-mono min-w-20 justify-center rounded-lg">
+                            @if ($failureThreshold === 1)
+                                {{ __('Instant') }}
+                            @else
+                                {{ $failureThreshold }} {{ __('fails') }}
+                            @endif
+                        </div>
+                    </div>
+                    <div class="label pb-0">
+                        <span class="label-text-alt text-base-content/50">
+                            @if ($failureThreshold === 1)
+                                {{ __('Alert immediately on first failure (recommended).') }}
+                            @else
+                                {{ __('Wait for :n consecutive failures before alerting. Useful for noisy or flaky endpoints.', ['n' => $failureThreshold]) }}
+                            @endif
+                        </span>
+                    </div>
+                    @error('failureThreshold')
+                        <div class="label pb-0">
+                            <span class="label-text-alt text-error">{{ $message }}</span>
+                        </div>
+                    @enderror
                 </div>
             </div>
         </div>

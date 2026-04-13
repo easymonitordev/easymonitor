@@ -26,7 +26,7 @@ class Create extends Component
 
     public bool $isActive = true;
 
-    public int $failureThreshold = 3;
+    public int $failureThreshold = 1;
 
     /**
      * Mount the component and authorize access
