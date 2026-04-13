@@ -1,5 +1,4 @@
-# ⚠️  PHP 8.4 is still RC as of Oct 2025 – use the RC tag for now
-FROM php:8.4-rc-fpm-alpine
+FROM php:8.4-fpm-alpine
 
 # ––––– system deps –––––
 RUN apk add --no-cache \
@@ -13,7 +12,7 @@ RUN apk add --no-cache \
  && apk del $PHPIZE_DEPS
 
 # ––––– Composer –––––
-COPY --from=composer:2.7 /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
 
 # ––––– Set working directory –––––
 WORKDIR /var/www/html
