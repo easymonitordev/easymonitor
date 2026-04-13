@@ -22,7 +22,7 @@
                     <label class="label pb-1">
                         <span class="label-text font-medium">{{ __('Name') }}</span>
                     </label>
-                    <input type="text" wire:model.live.debounce.300ms="name" required autofocus
+                    <input type="text" wire:model.live.debounce.150ms="name" required autofocus
                         class="input input-bordered w-full rounded-lg @error('name') input-error @enderror"
                         placeholder="{{ __('My Service Status') }}" />
                     @error('name')

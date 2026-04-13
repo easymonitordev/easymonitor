@@ -24,6 +24,12 @@ class Create extends Component
 
     public string $visibility = 'public';
 
+    /**
+     * Track the slug we last auto-generated so we can detect if the user
+     * manually edited it. Once they do, we stop syncing from the name.
+     */
+    public string $lastAutoSlug = '';
+
     public function mount(): void
     {
         $this->authorize('create', StatusPage::class);
@@ -31,8 +37,10 @@ class Create extends Component
 
     public function updatedName(string $value): void
     {
-        if (empty($this->slug) || $this->slug === Str::slug($this->name)) {
+        // Only auto-generate while the slug is empty or still matches what we last set.
+        if ($this->slug === '' || $this->slug === $this->lastAutoSlug) {
             $this->slug = Str::slug($value);
+            $this->lastAutoSlug = $this->slug;
         }
     }
 
