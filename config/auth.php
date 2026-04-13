@@ -4,6 +4,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Registration
+    |--------------------------------------------------------------------------
+    |
+    | When set to false (default), new account registration is locked. The
+    | very first user can always register (so the operator who sets up the
+    | app can sign in). All subsequent registrations are blocked.
+    |
+    | Set REGISTRATION_ENABLED=true in .env to allow open registration.
+    |
+    */
+
+    'registration_enabled' => env('REGISTRATION_ENABLED', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Authentication Defaults
     |--------------------------------------------------------------------------
     |
