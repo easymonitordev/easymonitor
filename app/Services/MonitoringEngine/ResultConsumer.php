@@ -166,7 +166,7 @@ class ResultConsumer
             } else {
                 // Failure: increment counter, only mark down after threshold
                 $consecutiveFailures = $monitor->consecutive_failures + 1;
-                $threshold = $monitor->failure_threshold ?? 3;
+                $threshold = $monitor->failure_threshold ?? 1;
 
                 $newStatus = $consecutiveFailures >= $threshold ? 'down' : $monitor->status;
 

@@ -27,7 +27,7 @@ class MonitorFactory extends Factory
             'last_checked_at' => null,
             'last_error' => null,
             'consecutive_failures' => 0,
-            'failure_threshold' => 3,
+            'failure_threshold' => 1,
         ];
     }
 

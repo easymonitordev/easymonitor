@@ -98,33 +98,6 @@
                 </div>
 
                 <div class="form-control">
-                    <label class="label pb-1">
-                        <span class="label-text font-medium">{{ __('Failure Threshold') }}</span>
-                    </label>
-                    <div class="flex items-center gap-4">
-                        <input
-                            type="range"
-                            wire:model.live="failureThreshold"
-                            min="1"
-                            max="10"
-                            step="1"
-                            class="range range-sm range-primary flex-1"
-                        />
-                        <div class="badge badge-lg font-mono min-w-20 justify-center rounded-lg">
-                            {{ $failureThreshold }} {{ trans_choice('fail|fails', $failureThreshold) }}
-                        </div>
-                    </div>
-                    <div class="label pb-0">
-                        <span class="label-text-alt text-base-content/50">{{ __('Number of consecutive failures before marking as down and alerting') }}</span>
-                    </div>
-                    @error('failureThreshold')
-                        <div class="label pb-0">
-                            <span class="label-text-alt text-error">{{ $message }}</span>
-                        </div>
-                    @enderror
-                </div>
-
-                <div class="form-control">
                     <label class="label cursor-pointer justify-start gap-4 py-3">
                         <input type="checkbox" wire:model="isActive" class="toggle toggle-success" />
                         <div>

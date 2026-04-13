@@ -23,7 +23,7 @@ class Edit extends Component
 
     public bool $isActive = true;
 
-    public int $failureThreshold = 3;
+    public int $failureThreshold = 1;
 
     /**
      * Mount the component and authorize access
@@ -38,7 +38,7 @@ class Edit extends Component
         $this->url = $monitor->url;
         $this->checkInterval = $monitor->check_interval;
         $this->isActive = $monitor->is_active;
-        $this->failureThreshold = $monitor->failure_threshold ?? 3;
+        $this->failureThreshold = $monitor->failure_threshold ?? 1;
     }
 
     /**

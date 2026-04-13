@@ -6,7 +6,7 @@ test('monitor consecutive failures defaults to zero', function () {
     $monitor = Monitor::factory()->create();
 
     expect($monitor->consecutive_failures)->toBe(0);
-    expect($monitor->failure_threshold)->toBe(3);
+    expect($monitor->failure_threshold)->toBe(1);
 });
 
 test('monitor stays pending until failure threshold is reached', function () {
