@@ -1,46 +1,393 @@
-#!/bin/bash
+#!/usr/bin/env bash
+#
+# EasyMonitor — unified installer.
+#
+# Run this from the project root. It will:
+#   1. Ask whether this is a Local (dev) or Production install
+#   2. Collect required (and optional) configuration interactively
+#   3. Generate or update .env
+#   4. Patch docker/caddy/Caddyfile.production for production installs
+#   5. Build and start the docker stack
+#   6. Run migrations, generate keys, build assets, set up storage
+#
+# Re-running is safe: it will detect existing config and offer to keep it.
+
 set -e
 
-echo "======================================"
-echo "EasyMonitor - Docker Setup"
-echo "======================================"
-echo ""
+# ── colors ──────────────────────────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+BOLD='\033[1m'
+NC='\033[0m'
 
-# Check if .env exists
-if [ ! -f ".env" ]; then
-    echo "⚠️  .env file not found!"
-    echo ""
-    read -p "Would you like to copy .env.example to .env? (y/n) " -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        cp .env.example .env
-        echo "✓ Created .env file from .env.example"
-        echo ""
-        echo "⚠️  Please edit .env and set your database password!"
-        echo "   Then run this script again."
-        exit 0
+info()    { printf "${BLUE}ℹ${NC}  %s\n" "$1"; }
+ok()      { printf "${GREEN}✓${NC}  %s\n" "$1"; }
+warn()    { printf "${YELLOW}⚠${NC}  %s\n" "$1"; }
+fail()    { printf "${RED}✗${NC}  %s\n" "$1"; exit 1; }
+header()  { printf "\n${BOLD}━━━ %s ━━━${NC}\n\n" "$1"; }
+
+# ── helpers ─────────────────────────────────────────────────────────────────
+require_cmd() {
+    command -v "$1" >/dev/null 2>&1 || fail "Required command not found: $1"
+}
+
+ask() {
+    # ask <prompt> <default>  → echoes the answer
+    local prompt="$1"
+    local default="$2"
+    local answer
+
+    if [ -n "$default" ]; then
+        read -p "  $prompt [$default]: " answer
+        echo "${answer:-$default}"
     else
-        echo "❌ Cannot continue without .env file"
-        exit 1
+        read -p "  $prompt: " answer
+        echo "$answer"
     fi
+}
+
+ask_secret() {
+    # ask_secret <prompt>  → echoes the typed secret (hidden), no default
+    local prompt="$1"
+    local answer
+    read -s -p "  $prompt: " answer
+    echo "" >&2
+    echo "$answer"
+}
+
+confirm() {
+    # confirm <prompt>  → returns 0 for y, 1 for n (default n)
+    local prompt="$1"
+    local answer
+    read -p "  $prompt [y/N]: " answer
+    [[ "$answer" =~ ^[Yy]$ ]]
+}
+
+random_string() {
+    # 32 chars, base64-safe-ish
+    openssl rand -base64 32 | tr -d '/+=\n' | cut -c1-32
+}
+
+detect_public_ip() {
+    # Try a few services; first one that responds wins. Empty if all fail.
+    for svc in "https://ifconfig.net" "https://ifconfig.me" "https://api.ipify.org"; do
+        local ip
+        ip=$(curl -fsS --max-time 5 "$svc" 2>/dev/null | tr -d '[:space:]')
+        if [[ "$ip" =~ ^[0-9.]+$ || "$ip" =~ ^[0-9a-fA-F:]+$ ]]; then
+            echo "$ip"
+            return 0
+        fi
+    done
+    echo ""
+}
+
+resolve_domain() {
+    # Resolve <domain> to an IP. Tries 'dig' then 'host' then 'getent'.
+    local domain="$1"
+    local ip
+    if command -v dig >/dev/null 2>&1; then
+        ip=$(dig +short "$domain" A | head -n1)
+    elif command -v host >/dev/null 2>&1; then
+        ip=$(host -t A "$domain" 2>/dev/null | awk '/has address/ {print $4; exit}')
+    elif command -v getent >/dev/null 2>&1; then
+        ip=$(getent hosts "$domain" | awk '{print $1; exit}')
+    fi
+    echo "$ip"
+}
+
+set_env() {
+    # set_env <key> <value>  — adds or updates a key in .env
+    local key="$1"
+    local value="$2"
+    # escape chars dangerous to sed
+    local escaped
+    escaped=$(printf '%s\n' "$value" | sed -e 's/[\/&]/\\&/g')
+
+    if grep -q "^${key}=" .env 2>/dev/null; then
+        sed -i.bak "s/^${key}=.*/${key}=${escaped}/" .env && rm -f .env.bak
+    else
+        echo "${key}=${value}" >> .env
+    fi
+}
+
+# ── checks ──────────────────────────────────────────────────────────────────
+require_cmd docker
+require_cmd openssl
+docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 not available (run 'docker compose version' to check)"
+
+cat <<'BANNER'
+
+╔══════════════════════════════════════════════════════════════╗
+║               EasyMonitor — Installer                        ║
+╚══════════════════════════════════════════════════════════════╝
+
+BANNER
+
+# ── mode ────────────────────────────────────────────────────────────────────
+header "Install mode"
+echo "  1) Local development"
+echo "  2) Production (auto-HTTPS via Let's Encrypt + on-demand TLS for status pages)"
+echo ""
+MODE=""
+while [[ "$MODE" != "1" && "$MODE" != "2" ]]; do
+    read -p "  Choose [1/2]: " MODE
+done
+
+IS_PROD=false
+[ "$MODE" = "2" ] && IS_PROD=true
+
+# ── .env ────────────────────────────────────────────────────────────────────
+if [ -f .env ]; then
+    warn ".env already exists."
+    if ! confirm "Continue and update existing .env in place?"; then
+        info "Aborting. Move .env aside and re-run if you want a clean start."
+        exit 0
+    fi
+else
+    cp .env.example .env
+    ok "Created .env from .env.example"
 fi
 
-# Build and start containers
-echo "[1/2] Building and starting Docker containers..."
+# ── basics ──────────────────────────────────────────────────────────────────
+header "Basics"
+
+APP_NAME=$(ask "App name" "EasyMonitor")
+set_env APP_NAME "$APP_NAME"
+
+if $IS_PROD; then
+    info "Detecting this server's public IP address..."
+    PUBLIC_IP=$(detect_public_ip)
+    if [ -n "$PUBLIC_IP" ]; then
+        ok "Server public IP: ${PUBLIC_IP}"
+    else
+        warn "Could not auto-detect public IP. You'll need to know it for DNS setup."
+    fi
+    echo ""
+
+    DOMAIN=$(ask "Primary domain (e.g. monitor.example.com)" "")
+    [ -z "$DOMAIN" ] && fail "Primary domain is required for production"
+
+    # DNS sanity check — warn early if the domain doesn't already point here.
+    DOMAIN_IP=$(resolve_domain "$DOMAIN")
+    if [ -n "$DOMAIN_IP" ] && [ -n "$PUBLIC_IP" ]; then
+        if [ "$DOMAIN_IP" = "$PUBLIC_IP" ]; then
+            ok "DNS check: ${DOMAIN} resolves to ${DOMAIN_IP} (matches this server)."
+        else
+            warn "DNS mismatch: ${DOMAIN} resolves to ${DOMAIN_IP}, but this server is ${PUBLIC_IP}."
+            warn "Update your DNS A record to ${PUBLIC_IP} before HTTPS will work."
+            confirm "Continue anyway?" || fail "Aborting. Fix DNS and re-run."
+        fi
+    elif [ -z "$DOMAIN_IP" ]; then
+        warn "${DOMAIN} doesn't resolve to any IP yet."
+        warn "Add a DNS A record:  ${DOMAIN}  →  ${PUBLIC_IP:-<this-server-ip>}"
+        confirm "Continue anyway? (TLS will fail until DNS propagates)" || fail "Aborting. Fix DNS and re-run."
+    fi
+
+    ADMIN_EMAIL=$(ask "Admin email (for Let's Encrypt notifications)" "")
+    [ -z "$ADMIN_EMAIL" ] && fail "Admin email is required for production"
+
+    set_env APP_ENV "production"
+    set_env APP_DEBUG "false"
+    set_env APP_URL "https://${DOMAIN}"
+    ok "App URL set to https://${DOMAIN}"
+else
+    set_env APP_ENV "local"
+    set_env APP_DEBUG "true"
+    set_env APP_URL "http://localhost"
+    ok "App URL set to http://localhost"
+fi
+
+# ── database ────────────────────────────────────────────────────────────────
+header "Database"
+
+if $IS_PROD; then
+    DB_PASSWORD=$(random_string)
+    info "Generated a strong random DB password."
+else
+    DB_PASSWORD=$(ask "Database password" "secret")
+fi
+set_env DB_PASSWORD "$DB_PASSWORD"
+
+# ── redis ───────────────────────────────────────────────────────────────────
+header "Redis"
+
+if $IS_PROD; then
+    if confirm "Set a Redis password?"; then
+        REDIS_PASSWORD=$(random_string)
+        set_env REDIS_PASSWORD "$REDIS_PASSWORD"
+        ok "Generated Redis password."
+    fi
+else
+    info "Leaving Redis without password (local dev)."
+fi
+
+# ── registration ────────────────────────────────────────────────────────────
+header "User registration"
+if confirm "Allow open user registration? (No = only the very first user can register)"; then
+    set_env REGISTRATION_ENABLED "true"
+else
+    set_env REGISTRATION_ENABLED "false"
+    info "Registration locked. The first user to sign up will be the admin."
+fi
+
+# ── mail ────────────────────────────────────────────────────────────────────
+header "Email (alerts)"
+echo "  1) Skip — log emails to storage/logs (no real delivery)"
+echo "  2) Amazon SES"
+echo "  3) Generic SMTP (Mailgun, Postmark, custom, etc.)"
+echo ""
+MAIL_CHOICE=""
+while [[ ! "$MAIL_CHOICE" =~ ^[1-3]$ ]]; do
+    read -p "  Choose [1/2/3]: " MAIL_CHOICE
+done
+
+case "$MAIL_CHOICE" in
+    2)
+        info "Amazon SES — make sure the from-address is on a verified identity."
+        set_env MAIL_MAILER "ses"
+        FROM=$(ask "From email" "alerts@${DOMAIN:-example.com}")
+        FROM_NAME=$(ask "From name" "$APP_NAME")
+        set_env MAIL_FROM_ADDRESS "\"$FROM\""
+        set_env MAIL_FROM_NAME "\"$FROM_NAME\""
+        AWS_KEY=$(ask "AWS Access Key ID" "")
+        AWS_SECRET=$(ask_secret "AWS Secret Access Key")
+        AWS_REGION=$(ask "AWS region" "us-east-1")
+        set_env AWS_ACCESS_KEY_ID "$AWS_KEY"
+        set_env AWS_SECRET_ACCESS_KEY "$AWS_SECRET"
+        set_env AWS_DEFAULT_REGION "$AWS_REGION"
+        ok "SES configured."
+        ;;
+    3)
+        set_env MAIL_MAILER "smtp"
+        SMTP_HOST=$(ask "SMTP host" "smtp.example.com")
+        SMTP_PORT=$(ask "SMTP port" "587")
+        SMTP_USER=$(ask "SMTP username" "")
+        SMTP_PASS=$(ask_secret "SMTP password")
+        FROM=$(ask "From email" "alerts@${DOMAIN:-example.com}")
+        FROM_NAME=$(ask "From name" "$APP_NAME")
+        set_env MAIL_HOST "$SMTP_HOST"
+        set_env MAIL_PORT "$SMTP_PORT"
+        set_env MAIL_USERNAME "$SMTP_USER"
+        set_env MAIL_PASSWORD "$SMTP_PASS"
+        set_env MAIL_SCHEME "tls"
+        set_env MAIL_FROM_ADDRESS "\"$FROM\""
+        set_env MAIL_FROM_NAME "\"$FROM_NAME\""
+        ok "SMTP configured."
+        ;;
+    *)
+        set_env MAIL_MAILER "log"
+        info "Emails will be written to storage/logs/laravel.log."
+        ;;
+esac
+
+# ── object storage (R2 / S3) ────────────────────────────────────────────────
+header "Object storage (status page logos)"
+echo "  1) Local disk (default)"
+echo "  2) Cloudflare R2"
+echo "  3) Amazon S3"
+echo ""
+STORE_CHOICE=""
+while [[ ! "$STORE_CHOICE" =~ ^[1-3]$ ]]; do
+    read -p "  Choose [1/2/3]: " STORE_CHOICE
+done
+
+case "$STORE_CHOICE" in
+    2)
+        info "Cloudflare R2 (S3-compatible)."
+        R2_ACCOUNT=$(ask "Cloudflare account ID" "")
+        R2_BUCKET=$(ask "R2 bucket name" "")
+        R2_KEY=$(ask "R2 access key ID" "")
+        R2_SECRET=$(ask_secret "R2 secret access key")
+        R2_PUBLIC=$(ask "Public URL (e.g. https://cdn.example.com — leave blank if private)" "")
+
+        set_env FILESYSTEM_DISK "s3"
+        set_env AWS_ACCESS_KEY_ID "$R2_KEY"
+        set_env AWS_SECRET_ACCESS_KEY "$R2_SECRET"
+        set_env AWS_DEFAULT_REGION "auto"
+        set_env AWS_BUCKET "$R2_BUCKET"
+        set_env AWS_ENDPOINT "https://${R2_ACCOUNT}.r2.cloudflarestorage.com"
+        set_env AWS_USE_PATH_STYLE_ENDPOINT "true"
+        [ -n "$R2_PUBLIC" ] && set_env AWS_URL "$R2_PUBLIC"
+        ok "R2 configured."
+        ;;
+    3)
+        info "Amazon S3."
+        S3_BUCKET=$(ask "S3 bucket name" "")
+        S3_REGION=$(ask "S3 region" "us-east-1")
+        S3_KEY=$(ask "AWS Access Key ID (or reuse SES creds — leave blank to reuse)" "")
+        if [ -n "$S3_KEY" ]; then
+            S3_SECRET=$(ask_secret "AWS Secret Access Key")
+            set_env AWS_ACCESS_KEY_ID "$S3_KEY"
+            set_env AWS_SECRET_ACCESS_KEY "$S3_SECRET"
+        fi
+        set_env FILESYSTEM_DISK "s3"
+        set_env AWS_BUCKET "$S3_BUCKET"
+        set_env AWS_DEFAULT_REGION "$S3_REGION"
+        set_env AWS_USE_PATH_STYLE_ENDPOINT "false"
+        ok "S3 configured."
+        ;;
+    *)
+        set_env FILESYSTEM_DISK "local"
+        info "Using local disk for uploads."
+        ;;
+esac
+
+# ── patch production Caddyfile ──────────────────────────────────────────────
+if $IS_PROD; then
+    header "Patching Caddyfile.production"
+
+    CADDYFILE="docker/caddy/Caddyfile.production"
+
+    # Replace email and domain placeholders.
+    sed -i.bak \
+        -e "s/admin@your-domain.com/${ADMIN_EMAIL}/g" \
+        -e "s/your-domain.com/${DOMAIN}/g" \
+        "$CADDYFILE"
+    rm -f "${CADDYFILE}.bak"
+
+    ok "Caddyfile.production updated for ${DOMAIN}"
+
+    # Ensure docker compose uses the production override automatically.
+    set_env COMPOSE_FILE "docker-compose.yml:docker-compose.production.yml"
+    ok "COMPOSE_FILE set so production overrides apply by default."
+fi
+
+# ── build & start docker ────────────────────────────────────────────────────
+header "Starting Docker"
+
+info "Building images and starting containers (this may take a few minutes)..."
 docker compose up -d --build
-echo "  ✓ Containers started!"
-echo ""
+ok "Containers up."
 
-# Wait a moment for containers to be fully ready
-echo "⏳ Waiting for containers to initialize..."
-sleep 5
-echo ""
+info "Waiting for services to become responsive..."
+sleep 6
 
-# Run setup inside container
-echo "[2/2] Running application setup..."
-docker exec php bash /var/www/html/docker/scripts/setup.sh
+# ── run inner setup ─────────────────────────────────────────────────────────
+header "Application setup"
+docker compose exec -T php bash /var/www/html/docker/scripts/setup.sh
 
+# ── done ────────────────────────────────────────────────────────────────────
+header "Done"
+if $IS_PROD; then
+    ok "EasyMonitor is starting up at https://${DOMAIN}"
+    echo ""
+    echo "  Next steps:"
+    if [ -n "$PUBLIC_IP" ]; then
+        echo "    1. DNS A record:  ${DOMAIN}  →  ${PUBLIC_IP}"
+    else
+        echo "    1. Make sure DNS A record for ${DOMAIN} points to this server."
+    fi
+    echo "    2. Open https://${DOMAIN} — Caddy will provision the TLS cert on first request."
+    echo "    3. Sign up to create the admin user (registration auto-locks after the first user)."
+    echo "    4. Tail logs:  docker compose logs -f php  (or caddy / probe)"
+else
+    ok "EasyMonitor is running at http://localhost"
+    echo ""
+    echo "  Next steps:"
+    echo "    1. Open http://localhost"
+    echo "    2. Click Sign In → Sign up to create your account"
+    echo "    3. Add your first monitor"
+fi
 echo ""
-echo "======================================"
-echo "✓ All done!"
-echo "======================================"
