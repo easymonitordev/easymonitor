@@ -1,0 +1,42 @@
+# Production overrides for docker-compose.yml.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --build
+#
+# Or set COMPOSE_FILE in your shell / .env:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.production.yml
+#
+# What this changes vs the default dev compose:
+#   - Caddy uses Caddyfile.production (real HTTPS via Let's Encrypt + on-demand TLS for status pages)
+#   - PostgreSQL no longer publishes port 5432 to the host (DB stays internal to the docker network)
+#   - APP_ENV / APP_DEBUG forced to production values
+#   - All services restart automatically on host reboot
+
+services:
+    caddy:
+        volumes:
+            - ./docker/caddy/Caddyfile.production:/etc/caddy/Caddyfile:ro
+            - caddy_data:/data
+            - caddy_config:/config
+            - ./public:/srv
+        restart: unless-stopped
+
+    nginx:
+        restart: unless-stopped
+
+    php:
+        environment:
+            APP_ENV: production
+            APP_DEBUG: "false"
+        restart: unless-stopped
+
+    db:
+        # Remove host port mapping — DB is only reachable inside the docker network.
+        ports: !reset []
+        restart: unless-stopped
+
+    redis:
+        restart: unless-stopped
+
+    probe:
+        restart: unless-stopped
