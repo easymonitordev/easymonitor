@@ -112,7 +112,7 @@ The `setup.sh` installer has a "Will you run probes on other machines?" prompt t
 The probe node itself lives in a separate repo so you can deploy it on any host without cloning the full EasyMonitor app:
 
 - **Probe repo:** [github.com/easymonitordev/probe-node](https://github.com/easymonitordev/probe-node)
-- **Pre-built image:** `ghcr.io/easymonitordev/probe-node:latest`
+- **Pre-built image:** `easymonitor/probe-node:latest` (Docker Hub) — mirror at `ghcr.io/easymonitordev/probe-node:latest`
 
 Full server-side tunnel setup (Tailscale / Cloudflare / manual) and probe-side `docker run` details are in [PROBE_NODE_SETUP.md](PROBE_NODE_SETUP.md).
 

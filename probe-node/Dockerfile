@@ -1,30 +1,36 @@
-# Build stage
-FROM golang:1.24-alpine AS builder
+# Build stage — always runs on BUILDPLATFORM (the native runner arch) and
+# cross-compiles to the TARGETPLATFORM using Go's built-in cross-compiler.
+# This avoids QEMU emulation entirely and is ~10x faster under buildx.
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
 
 # Install build dependencies
-RUN apk add --no-cache git make ca-certificates tzdata
+RUN apk add --no-cache git ca-certificates tzdata
 
 WORKDIR /build
 
-# Copy go mod files
+# Cache module downloads separately from source code.
 COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy source code
 COPY . .
 
-# Build binary with version info
+# buildx injects TARGETOS and TARGETARCH for the platform being built.
+# CGO_ENABLED=0 is required for static binaries that run in alpine/scratch.
+ARG TARGETOS
+ARG TARGETARCH
 ARG VERSION=dev
 ARG BUILD_TIME
-RUN CGO_ENABLED=0 GOOS=linux go build \
+
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -ldflags "-X main.version=${VERSION} -X main.buildTime=${BUILD_TIME} -s -w" \
     -o probe-node \
     ./cmd/probe
 
-# Final stage
+# Final stage — minimal runtime image for the target platform.
 FROM alpine:3.23
 
-# Install runtime dependencies (iputils for ping)
+# Install runtime dependencies (iputils for ping).
 RUN apk add --no-cache ca-certificates tzdata iputils
 
 # Create non-root user
