@@ -6,6 +6,7 @@ namespace App\Providers;
 
 use App\Jobs\MonitoringEngine\DispatchMonitorChecks;
 use App\Jobs\MonitoringEngine\ProcessMonitorResults;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
@@ -27,42 +28,63 @@ class MonitoringServiceProvider extends ServiceProvider
     private const INIT_KEY = 'monitoring:dispatcher:initialized';
 
     /**
-     * Bootstrap services
+     * Bootstrap services.
+     *
+     * The actual dispatch runs *after* all other providers have booted,
+     * via the `booted()` callback. Trying to dispatch directly from boot()
+     * can touch services (DB, Redis, queue) that aren't ready yet.
      */
     public function boot(): void
     {
-        // Only run in console contexts (Horizon, queue workers, artisan)
-        // Skip during unit tests and package discovery
+        // Only run in CLI contexts (Horizon, queue workers, artisan). Skip HTTP
+        // requests (so web traffic doesn't keep triggering this) and unit tests.
         if (! $this->app->runningInConsole() || $this->app->runningUnitTests()) {
             return;
         }
 
-        // Skip during composer package discovery or when app is not bootstrapped
-        if (! $this->app->isBooted()) {
+        // Skip trivial artisan invocations that shouldn't kick off the loop.
+        // Only the `horizon` and `horizon:work*` commands should bootstrap.
+        $argv = $_SERVER['argv'] ?? [];
+        $command = $argv[1] ?? '';
+        if (! str_starts_with($command, 'horizon')) {
             return;
         }
 
-        // Use a Redis lock to prevent race conditions
-        $lock = Cache::lock('monitoring:dispatcher:bootstrap', 10);
+        // Defer to booted() so DB/Redis/Queue are ready.
+        $this->app->booted(function (Application $app): void {
+            $this->bootstrapMonitoringLoop();
+        });
+    }
 
+    /**
+     * Dispatch the initial self-requeuing jobs, guarded by a cache flag so
+     * we only bootstrap once per Horizon lifecycle.
+     */
+    private function bootstrapMonitoringLoop(): void
+    {
         try {
-            if ($lock->get()) {
-                // Check if already initialized
+            $lock = Cache::lock('monitoring:dispatcher:bootstrap', 10);
+
+            if (! $lock->get()) {
+                return;
+            }
+
+            try {
                 if (Cache::has(self::INIT_KEY)) {
                     return;
                 }
 
-                // Dispatch the initial jobs to start the monitoring loop
                 dispatch(new DispatchMonitorChecks);
                 dispatch(new ProcessMonitorResults);
 
-                // Mark as initialized forever (manual restart required)
                 Cache::forever(self::INIT_KEY, true);
 
                 Log::info('Monitoring dispatcher and result processor bootstrapped');
+            } finally {
+                $lock->release();
             }
-        } finally {
-            $lock->release();
+        } catch (\Throwable $e) {
+            Log::warning('Monitoring bootstrap failed: '.$e->getMessage());
         }
     }
 }
