@@ -109,7 +109,12 @@ Supported options:
 
 The `setup.sh` installer has a "Will you run probes on other machines?" prompt that auto-installs Tailscale on the server if you pick that option.
 
-Full step-by-step (including the probe side) is in [PROBE_NODE_SETUP.md](PROBE_NODE_SETUP.md).
+The probe node itself lives in a separate repo so you can deploy it on any host without cloning the full EasyMonitor app:
+
+- **Probe repo:** [github.com/easymonitordev/probe-node](https://github.com/easymonitordev/probe-node)
+- **Pre-built image:** `ghcr.io/easymonitordev/probe-node:latest`
+
+Full server-side tunnel setup (Tailscale / Cloudflare / manual) and probe-side `docker run` details are in [PROBE_NODE_SETUP.md](PROBE_NODE_SETUP.md).
 
 To disable the bundled local probe:
 
