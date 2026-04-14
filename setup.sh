@@ -454,6 +454,13 @@ sleep 6
 header "Application setup"
 docker compose exec -T php bash /var/www/html/docker/scripts/setup.sh
 
+# ── recycle probe so it picks up the freshly-generated JWT_TOKEN ────────────
+# The bundled probe container started before the inner setup wrote
+# PROBE_JWT_TOKEN to .env; recreate it so Docker re-reads the env file.
+info "Restarting probe to pick up the new token..."
+docker compose up -d --force-recreate probe >/dev/null 2>&1 || true
+ok "Probe restarted."
+
 # ── done ────────────────────────────────────────────────────────────────────
 header "Done"
 if $IS_PROD; then
