@@ -18,8 +18,8 @@
         <!-- Header -->
         <header class="mb-8">
             <div class="flex items-center gap-3 mb-2">
-                @if ($statusPage->logo_path)
-                    <img src="{{ asset('storage/'.$statusPage->logo_path) }}" alt="{{ $statusPage->name }}" class="h-10 w-auto" />
+                @if ($statusPage->logoUrl())
+                    <img src="{{ $statusPage->logoUrl() }}" alt="{{ $statusPage->name }}" class="h-10 w-auto" />
                 @endif
                 <h1 class="text-3xl font-bold">{{ $statusPage->name }}</h1>
             </div>

@@ -24,14 +24,14 @@
 
         <div class="flex gap-2">
             @if ($statusPage->visibility === 'public')
-                <a href="{{ route('public.status', $statusPage->slug) }}" target="_blank" class="btn btn-ghost btn-sm">
+                <a href="{{ $statusPage->publicUrl() }}" target="_blank" class="btn btn-ghost btn-sm">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                     </svg>
                     {{ __('View Live') }}
                 </a>
             @elseif ($statusPage->visibility === 'unlisted')
-                <button onclick="navigator.clipboard.writeText('{{ url(route('public.status', $statusPage->slug)) }}?key={{ $statusPage->access_key }}'); this.innerText='Copied!'" class="btn btn-ghost btn-sm">
+                <button onclick="navigator.clipboard.writeText('{{ $statusPage->publicUrl() }}'); this.innerText='Copied!'" class="btn btn-ghost btn-sm">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                     </svg>
@@ -293,7 +293,7 @@
 
                     @if ($statusPage->logo_path)
                         <div class="flex items-center gap-4">
-                            <img src="{{ asset('storage/'.$statusPage->logo_path) }}" alt="Logo" class="h-16 w-auto rounded border border-base-300 p-2 bg-base-200" />
+                            <img src="{{ $statusPage->logoUrl() }}" alt="Logo" class="h-16 w-auto rounded border border-base-300 p-2 bg-base-200" />
                             <button type="button" wire:click="removeLogo" wire:confirm="{{ __('Remove logo?') }}" class="btn btn-ghost btn-sm text-error">
                                 {{ __('Remove') }}
                             </button>
@@ -449,7 +449,7 @@
                         <div class="alert">
                             <div class="flex-1">
                                 <div class="font-medium text-sm mb-1">{{ __('Secret Link') }}</div>
-                                <code class="text-xs break-all">{{ url(route('public.status', $statusPage->slug)) }}?key={{ $statusPage->access_key }}</code>
+                                <code class="text-xs break-all">{{ $statusPage->publicUrl() }}</code>
                             </div>
                             <button type="button" wire:click="regenerateAccessKey" wire:confirm="{{ __('Regenerate? The current secret link will stop working.') }}" class="btn btn-ghost btn-sm">
                                 {{ __('Regenerate') }}
@@ -524,8 +524,7 @@
 
                             <div class="font-medium text-sm mb-2">{{ __('Step 3 — Click verify (DNS may take a few minutes to propagate):') }}</div>
                             <button type="button" wire:click="verifyCustomDomain" class="btn btn-primary btn-sm">
-                                <span wire:loading.remove wire:target="verifyCustomDomain">{{ __('Verify Domain') }}</span>
-                                <span wire:loading wire:target="verifyCustomDomain" class="loading loading-spinner loading-sm"></span>
+                                {{ __('Verify Domain') }}
                             </button>
                         </div>
                     @endif
