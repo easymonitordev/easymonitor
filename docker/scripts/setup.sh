@@ -17,7 +17,11 @@ echo ""
 
 # Wait for Redis to be ready
 echo "[2/6] Waiting for Redis to be ready..."
-until redis-cli -h "$REDIS_HOST" ping 2>/dev/null | grep -q PONG; do
+REDIS_AUTH=""
+if [ -n "$REDIS_PASSWORD" ]; then
+    REDIS_AUTH="-a $REDIS_PASSWORD --no-auth-warning"
+fi
+until redis-cli -h "$REDIS_HOST" $REDIS_AUTH ping 2>/dev/null | grep -q PONG; do
   echo "  ⏳ Redis is unavailable - waiting..."
   sleep 2
 done

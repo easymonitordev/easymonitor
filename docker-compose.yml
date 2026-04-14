@@ -37,6 +37,7 @@ services:
             DB_USERNAME: ${DB_USERNAME:-easymonitor}
             DB_PASSWORD: ${DB_PASSWORD:-secret}
             REDIS_HOST: redis
+            REDIS_PASSWORD: ${REDIS_PASSWORD:-}
         networks: [app]
         depends_on: [db, redis]
 
@@ -58,7 +59,19 @@ services:
     redis:
         image: redis:7.4-alpine
         container_name: redis
-        command: ["redis-server", "--appendonly", "yes"]
+        environment:
+            REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+        # Run redis-server with --requirepass only when REDIS_PASSWORD is set.
+        # The $$ lets the shell (inside the container) see $REDIS_PASSWORD
+        # instead of Docker Compose trying to substitute it.
+        command: >
+            sh -c '
+                if [ -n "$$REDIS_PASSWORD" ]; then
+                    exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"
+                else
+                    exec redis-server --appendonly yes
+                fi
+            '
         volumes:
             - redis_data:/data
         networks: [app]

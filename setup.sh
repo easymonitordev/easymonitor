@@ -214,13 +214,96 @@ set_env DB_PASSWORD "$DB_PASSWORD"
 header "Redis"
 
 if $IS_PROD; then
-    if confirm "Set a Redis password?"; then
-        REDIS_PASSWORD=$(random_string)
-        set_env REDIS_PASSWORD "$REDIS_PASSWORD"
-        ok "Generated Redis password."
-    fi
+    REDIS_PASSWORD=$(random_string)
+    set_env REDIS_PASSWORD "$REDIS_PASSWORD"
+    ok "Generated Redis password (required for production)."
 else
     info "Leaving Redis without password (local dev)."
+    REDIS_PASSWORD=""
+fi
+
+# ── remote probes ───────────────────────────────────────────────────────────
+REMOTE_PROBES=false
+REMOTE_REDIS_URL=""
+
+header "Remote probe nodes"
+
+echo "  EasyMonitor runs a local probe out of the box. If you want probes in"
+echo "  other regions, they need a network path to this server's Redis."
+echo ""
+echo "  Recommended approach: a VPN-style tunnel (Tailscale or Cloudflare"
+echo "  Tunnel). Never expose Redis directly on the public internet."
+echo ""
+if confirm "Will you run probes on other machines?"; then
+    REMOTE_PROBES=true
+
+    echo ""
+    echo "  1) Tailscale  — simplest. Free for up to 100 devices."
+    echo "  2) Cloudflare Tunnel — free with any Cloudflare account, more setup."
+    echo "  3) I'll configure networking manually (SSH, WireGuard, etc.)"
+    echo ""
+    TUNNEL_CHOICE=""
+    while [[ ! "$TUNNEL_CHOICE" =~ ^[1-3]$ ]]; do
+        read -p "  Choose [1/2/3]: " TUNNEL_CHOICE
+    done
+
+    case "$TUNNEL_CHOICE" in
+        1)
+            # Tailscale
+            if command -v tailscale >/dev/null 2>&1; then
+                ok "Tailscale already installed."
+            else
+                info "Tailscale is not installed."
+                if confirm "Install Tailscale now? (runs the official installer)"; then
+                    curl -fsSL https://tailscale.com/install.sh | sh || fail "Tailscale install failed."
+                    ok "Tailscale installed."
+                else
+                    warn "Skipping Tailscale install. Follow https://tailscale.com/download when ready."
+                fi
+            fi
+
+            if command -v tailscale >/dev/null 2>&1; then
+                if ! tailscale status >/dev/null 2>&1; then
+                    info "Starting Tailscale — a browser-based login URL will open."
+                    sudo tailscale up || warn "Tailscale up failed. Run 'sudo tailscale up' manually."
+                fi
+
+                TAILSCALE_IP=$(tailscale ip -4 2>/dev/null | head -n1 || true)
+                if [ -n "$TAILSCALE_IP" ]; then
+                    ok "Tailscale IP: $TAILSCALE_IP"
+                    set_env REDIS_BIND_HOST "$TAILSCALE_IP"
+                    REMOTE_REDIS_URL="redis://${TAILSCALE_IP}:6379/0"
+                else
+                    warn "Couldn't read Tailscale IP. Run 'tailscale ip -4' after setup and update REDIS_BIND_HOST in .env."
+                    set_env REDIS_BIND_HOST "127.0.0.1"
+                    REMOTE_REDIS_URL="redis://<tailscale-ip>:6379/0"
+                fi
+            else
+                set_env REDIS_BIND_HOST "127.0.0.1"
+                REMOTE_REDIS_URL="redis://<tailscale-ip>:6379/0 (after Tailscale install)"
+            fi
+            ;;
+        2)
+            info "Cloudflare Tunnel setup — see PROBE_NODE_SETUP.md for the full guide."
+            info "cloudflared will run on this host and bridge a hostname to localhost:6379."
+            set_env REDIS_BIND_HOST "127.0.0.1"
+            REMOTE_REDIS_URL="redis://<your-tunnel-hostname>:6379/0"
+            ;;
+        3)
+            info "Manual networking. Redis will bind to 127.0.0.1:6379 by default —"
+            info "edit REDIS_BIND_HOST in .env if you need a different interface."
+            set_env REDIS_BIND_HOST "127.0.0.1"
+            REMOTE_REDIS_URL="redis://<your-tunnel-endpoint>:6379/0"
+            ;;
+    esac
+
+    # Append the remote-probes compose override so REDIS_BIND_HOST takes effect.
+    CURRENT_CF=$(grep -E '^COMPOSE_FILE=' .env 2>/dev/null | head -n1 | cut -d= -f2- || echo "")
+    [ -z "$CURRENT_CF" ] && CURRENT_CF="docker-compose.yml"
+    if [[ "$CURRENT_CF" != *"remote-probes"* ]]; then
+        CURRENT_CF="${CURRENT_CF}:docker-compose.remote-probes.yml"
+    fi
+    set_env COMPOSE_FILE "$CURRENT_CF"
 fi
 
 # ── registration ────────────────────────────────────────────────────────────
@@ -389,5 +472,13 @@ else
     echo "    1. Open http://localhost"
     echo "    2. Click Sign In → Sign up to create your account"
     echo "    3. Add your first monitor"
+fi
+
+if $REMOTE_PROBES; then
+    echo ""
+    echo "  Remote probes:"
+    echo "    - Probe connection URL:   ${REMOTE_REDIS_URL}"
+    echo "    - Generate a probe token: docker compose exec php php artisan probe:generate-token --node-id=<region>"
+    echo "    - Full probe setup guide: PROBE_NODE_SETUP.md"
 fi
 echo ""
