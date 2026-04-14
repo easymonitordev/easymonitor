@@ -14,7 +14,7 @@ All commands assume you're in the project directory (`cd ~/easymonitor`).
 | Page loads blank (no output) | Set `APP_DEBUG=true` in `.env`, then `docker compose exec php php artisan config:clear` |
 | Container won't stay up | `docker compose logs <service> --tail 50` |
 | Monitors never change from "Pending" | `docker compose exec php tail -n 40 storage/logs/laravel.log \| grep -iE "dispatched\|processed"` |
-| App-level system check | Visit `https://your-domain/healthz` (or `curl`) |
+| App-level system check | Log in, then visit `/healthz` — shows DB, Redis, monitoring loop, probe status |
 
 ---
 

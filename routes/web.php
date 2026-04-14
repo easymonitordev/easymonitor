@@ -50,11 +50,11 @@ Route::get('dashboard', Dashboard::class)
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
 
-// App-level health dashboard (DB, Redis, monitoring loop, probes).
-// Returns JSON if the client asks for it, rich HTML for browsers.
-Route::get('/healthz', HealthController::class)->name('healthz');
-
 Route::middleware(['auth'])->group(function () {
+    // App-level health dashboard (DB, Redis, monitoring loop, probes).
+    // Returns JSON if the client asks for it, rich HTML for browsers.
+    Route::get('/healthz', HealthController::class)->name('healthz');
+
     Route::redirect('settings', 'settings/profile');
 
     Route::get('settings/profile', Profile::class)->name('settings.profile');
