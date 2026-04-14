@@ -152,13 +152,16 @@ class Manage extends Component
         ]);
 
         $logoPath = $this->statusPage->logo_path;
+        // Resolve the disk to use for uploads: configured default (R2 / S3 /
+        // local). Falls back to the 'public' disk for local-only installs.
+        $disk = config('filesystems.default') === 'local' ? 'public' : config('filesystems.default');
 
         if ($this->logo) {
             // Delete old logo if any
-            if ($logoPath && Storage::disk('public')->exists($logoPath)) {
-                Storage::disk('public')->delete($logoPath);
+            if ($logoPath && Storage::disk($disk)->exists($logoPath)) {
+                Storage::disk($disk)->delete($logoPath);
             }
-            $logoPath = $this->logo->store('status-page-logos', 'public');
+            $logoPath = $this->logo->store('status-page-logos', $disk);
         }
 
         $this->statusPage->update([
@@ -179,8 +182,10 @@ class Manage extends Component
     {
         $this->authorize('update', $this->statusPage);
 
-        if ($this->statusPage->logo_path && Storage::disk('public')->exists($this->statusPage->logo_path)) {
-            Storage::disk('public')->delete($this->statusPage->logo_path);
+        $disk = config('filesystems.default') === 'local' ? 'public' : config('filesystems.default');
+
+        if ($this->statusPage->logo_path && Storage::disk($disk)->exists($this->statusPage->logo_path)) {
+            Storage::disk($disk)->delete($this->statusPage->logo_path);
         }
 
         $this->statusPage->update(['logo_path' => null]);

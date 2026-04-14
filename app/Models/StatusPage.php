@@ -149,6 +149,48 @@ class StatusPage extends Model
     }
 
     /**
+     * Build the publicly-fetchable URL for the logo, regardless of which
+     * storage disk holds it (local 'public' disk, R2, S3, etc.).
+     *
+     * Returns null if no logo is set.
+     */
+    public function logoUrl(): ?string
+    {
+        if (! $this->logo_path) {
+            return null;
+        }
+
+        $disk = config('filesystems.default') === 'local' ? 'public' : config('filesystems.default');
+
+        try {
+            return \Illuminate\Support\Facades\Storage::disk($disk)->url($this->logo_path);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * The canonical public URL for this status page.
+     *
+     * Uses the verified custom domain when set, otherwise falls back to the
+     * app-domain slug route. For unlisted pages the secret key is appended.
+     */
+    public function publicUrl(): string
+    {
+        if ($this->isDomainVerified()) {
+            $base = 'https://'.$this->custom_domain;
+        } else {
+            $base = route('public.status', $this->slug);
+        }
+
+        if ($this->visibility === 'unlisted' && $this->access_key) {
+            return $base.'?key='.$this->access_key;
+        }
+
+        return $base;
+    }
+
+    /**
      * Resolve which theme name to apply on `data-theme`.
      *
      * If custom_css contains a DaisyUI `@plugin "daisyui/theme" { name: "X"; ... }`
