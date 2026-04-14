@@ -76,17 +76,23 @@ ping -c 2 <server-tailscale-ip>
 
 ### 2. Run the probe
 
+Use `--network host` so the container shares the host's Tailscale interface —
+without it, the container's own network namespace can't see the tailnet.
+
 ```bash
 docker run -d \
   --name easymonitor-probe \
   --restart unless-stopped \
+  --network host \
   -e NODE_ID="us-east-1" \
   -e REDIS_URL="redis://<server-tailscale-ip>:6379/0" \
   -e REDIS_PASSWORD="<redis password>" \
   -e JWT_TOKEN="<probe jwt token>" \
-  -p 8080:8080 \
   easymonitor/probe-node:latest
 ```
+
+(With `--network host` the probe's health check port 8080 is automatically
+on the host — no `-p` flag needed.)
 
 ### 3. Verify
 

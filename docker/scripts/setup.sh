@@ -86,6 +86,7 @@ if grep -q "PROBE_JWT_TOKEN=$" .env || grep -q "PROBE_JWT_TOKEN=\"\"" .env || ! 
     php artisan probe:generate-token \
         --node-id="${PROBE_NODE_ID:-local-node-1}" \
         --expires=365 \
+        --local \
         --no-interaction 2>/dev/null || true
     echo "  ✓ Probe node token generated!"
 else

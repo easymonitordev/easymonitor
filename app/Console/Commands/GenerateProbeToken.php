@@ -7,10 +7,10 @@ namespace App\Console\Commands;
 use App\Services\ProbeNodeService;
 use Illuminate\Console\Command;
 
-use function Laravel\Prompts\text;
-use function Laravel\Prompts\info;
-use function Laravel\Prompts\error;
 use function Laravel\Prompts\confirm;
+use function Laravel\Prompts\error;
+use function Laravel\Prompts\info;
+use function Laravel\Prompts\text;
 
 /**
  * Generate JWT tokens for probe nodes
@@ -26,7 +26,8 @@ class GenerateProbeToken extends Command
     protected $signature = 'probe:generate-token
                             {--node-id= : The unique identifier for the probe node}
                             {--tags= : Comma-separated list of tags for the probe}
-                            {--expires= : Number of days until token expires (default: 365)}';
+                            {--expires= : Number of days until token expires (default: 365)}
+                            {--local : Write PROBE_NODE_ID/PROBE_JWT_TOKEN to the server .env (only for the bundled local probe)}';
 
     /**
      * The console command description.
@@ -88,9 +89,15 @@ class GenerateProbeToken extends Command
         try {
             $token = $probeService->generateToken($nodeId, $tags, $expires);
 
-            // Non-interactive mode: just update .env silently
+            // Non-interactive mode: only touch the server .env when this token
+            // is explicitly meant for the bundled local probe. Otherwise print
+            // the token so the caller can copy it to the remote probe host.
             if ($this->option('no-interaction')) {
-                $this->updateEnvFile($nodeId, $token);
+                if ($this->option('local')) {
+                    $this->updateEnvFile($nodeId, $token);
+                } else {
+                    $this->line($token);
+                }
 
                 return self::SUCCESS;
             }
@@ -114,13 +121,15 @@ class GenerateProbeToken extends Command
             $this->components->info('Add this token to your probe node configuration:');
             $this->line("NODE_ID={$nodeId}");
             $this->line("JWT_TOKEN={$token}");
-            $this->line("REDIS_URL=redis://redis:6379/0  # Use rediss:// for TLS");
+            $this->line('REDIS_URL=redis://redis:6379/0  # Use rediss:// for TLS');
             $this->newLine();
             $this->components->warn('Note: JWT_SECRET stays on the server - probes only need the token!');
 
             $this->newLine();
 
-            if (confirm('Would you like to update .env with this token?', default: false)) {
+            if ($this->option('local')) {
+                $this->updateEnvFile($nodeId, $token);
+            } elseif (confirm('Is this the bundled local probe? (updates server .env)', default: false)) {
                 $this->updateEnvFile($nodeId, $token);
             }
 

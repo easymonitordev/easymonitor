@@ -250,9 +250,11 @@ func startHealthCheckServer(ctx context.Context, cfg *config.Config, cons *consu
 
 // ensureConsumerGroup creates the consumer group if it doesn't exist
 func ensureConsumerGroup(ctx context.Context, client *redis.Client, stream, group string) error {
-	// Try to create the consumer group with MKSTREAM option
-	// XGROUP CREATE stream group 0 MKSTREAM
-	err := client.XGroupCreateMkStream(ctx, stream, group, "0").Err()
+	// Try to create the consumer group with MKSTREAM option.
+	// Start from "$" so a newly-joined probe only picks up checks dispatched
+	// after it comes online, not the entire stream backlog. On restart the
+	// group already exists (BUSYGROUP) and resumes from last-delivered-id.
+	err := client.XGroupCreateMkStream(ctx, stream, group, "$").Err()
 	if err != nil {
 		// If the group already exists, that's fine
 		if err.Error() == "BUSYGROUP Consumer Group name already exists" {
