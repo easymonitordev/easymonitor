@@ -43,6 +43,10 @@ func (c *Consumer) EnsureConsumerGroup(ctx context.Context) error {
 		return fmt.Errorf("failed to create consumer group: %w", err)
 	}
 
+	if err := c.client.XGroupSetID(ctx, c.cfg.CheckStream, c.cfg.ConsumerGroup, "$").Err(); err != nil {
+		return fmt.Errorf("failed to set consumer group position: %w", err)
+	}
+
 	return nil
 }
 

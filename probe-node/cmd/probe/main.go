@@ -248,19 +248,19 @@ func startHealthCheckServer(ctx context.Context, cfg *config.Config, cons *consu
 	}
 }
 
-// ensureConsumerGroup creates the consumer group if it doesn't exist
+// ensureConsumerGroup creates the consumer group at "$" and, if it already
+// existed, forces its read position forward to "$" so we never drain a stale
+// backlog. Time-sensitive monitoring checks accumulated while the probe was
+// offline are pointless to replay — a missed check from 10 minutes ago tells
+// you nothing useful about "up right now". Every startup = clean slate.
 func ensureConsumerGroup(ctx context.Context, client *redis.Client, stream, group string) error {
-	// Try to create the consumer group with MKSTREAM option.
-	// Start from "$" so a newly-joined probe only picks up checks dispatched
-	// after it comes online, not the entire stream backlog. On restart the
-	// group already exists (BUSYGROUP) and resumes from last-delivered-id.
 	err := client.XGroupCreateMkStream(ctx, stream, group, "$").Err()
-	if err != nil {
-		// If the group already exists, that's fine
-		if err.Error() == "BUSYGROUP Consumer Group name already exists" {
-			return nil
-		}
+	if err != nil && err.Error() != "BUSYGROUP Consumer Group name already exists" {
 		return fmt.Errorf("failed to create consumer group: %w", err)
+	}
+
+	if err := client.XGroupSetID(ctx, stream, group, "$").Err(); err != nil {
+		return fmt.Errorf("failed to set consumer group position: %w", err)
 	}
 	return nil
 }
