@@ -116,8 +116,19 @@
                         </ul>
                     </div>
 
+                    <!-- Footer link — system health -->
+                    <div class="mt-auto">
+                        <a href="{{ route('healthz') }}" target="_blank"
+                           class="flex items-center gap-2 px-4 py-2 text-xs text-base-content/50 hover:text-base-content/80 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                            </svg>
+                            {{ __('System Health') }}
+                        </a>
+                    </div>
+
                     <!-- Desktop User Menu -->
-                    <div class="hidden lg:block mt-auto">
+                    <div class="hidden lg:block">
                         <div class="divider"></div>
                         <div class="dropdown dropdown-top">
                             <div tabindex="0" role="button" class="btn btn-ghost w-full justify-start">
