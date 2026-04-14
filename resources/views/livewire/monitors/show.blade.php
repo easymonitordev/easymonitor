@@ -96,7 +96,12 @@
                 </div>
                 <div class="stat-title">{{ __('Check Interval') }}</div>
                 <div class="stat-value text-2xl">{{ $monitor->check_interval }}<span class="text-lg">s</span></div>
-                <div class="stat-desc">{{ $monitor->is_active ? __('Active') : __('Paused') }}</div>
+                <div class="stat-desc">
+                    {{ $monitor->is_active ? __('Active') : __('Paused') }}
+                    @if ($activeProbeCount > 0)
+                        · {{ trans_choice(':count probe|:count probes', $activeProbeCount, ['count' => $activeProbeCount]) }}
+                    @endif
+                </div>
             </div>
         </div>
 

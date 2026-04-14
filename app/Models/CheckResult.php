@@ -37,6 +37,7 @@ class CheckResult extends Model
     protected $fillable = [
         'monitor_id',
         'node_id',
+        'round_id',
         'is_up',
         'response_time_ms',
         'status_code',

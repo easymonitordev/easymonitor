@@ -89,8 +89,9 @@ class PublicStatusPageController extends Controller
             ->limit(10)
             ->get();
 
-        // Flat list of all visible monitors across all sections
-        $monitors = $sections->flatMap(fn ($s) => $s['monitors']);
+        // Flat list of all visible monitors across all sections, ordered by id
+        // so the render order stays stable across page refreshes.
+        $monitors = $sections->flatMap(fn ($s) => $s['monitors'])->sortBy('id')->values();
         $monitorStats = $this->computeMonitorStats($monitors->pluck('id')->all());
 
         return view('public.status', [

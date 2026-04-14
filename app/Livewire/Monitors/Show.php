@@ -173,6 +173,7 @@ class Show extends Component
             'minResponseTime' => $minResponseTime,
             'maxResponseTime' => $maxResponseTime,
             'chartData' => $chartData,
+            'activeProbeCount' => \App\Models\ProbeNode::activeCount(),
         ]);
     }
 }

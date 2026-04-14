@@ -177,6 +177,10 @@ func createCheckHandler(
 			result = httpChecker.Check(job.CheckID, cfg.NodeID, job.URL, timeout)
 		}
 
+		// Propagate round_id so the server can group this result with other
+		// probes' results for the same dispatched check (quorum).
+		result.RoundID = job.RoundID
+
 		// Publish result
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

@@ -6,6 +6,7 @@ namespace App\Services\MonitoringEngine;
 
 use App\Models\CheckResult;
 use App\Models\Monitor;
+use App\Models\ProbeNode;
 use App\Notifications\MonitorDown;
 use App\Notifications\MonitorRecovered;
 use Illuminate\Support\Facades\DB;
@@ -120,69 +121,148 @@ class ResultConsumer
      *
      * @param  array<string, string>  $fields
      */
-    private function processResult(array $fields): void
+    public function processResult(array $fields): void
     {
         $monitorId = (int) $fields['check_id'];
         $nodeId = $fields['node'];
+        $roundId = $fields['round_id'] ?? null;
         $isUp = (bool) ((int) $fields['ok']);
         $responseTime = isset($fields['ms']) ? (int) $fields['ms'] : null;
         $statusCode = isset($fields['status_code']) ? (int) $fields['status_code'] : null;
         $errorMessage = $fields['error'] ?? null;
 
-        DB::transaction(function () use ($monitorId, $nodeId, $isUp, $responseTime, $statusCode, $errorMessage) {
-            // Store the check result
+        DB::transaction(function () use ($monitorId, $nodeId, $roundId, $isUp, $responseTime, $statusCode, $errorMessage) {
+            // Auto-register / refresh the probe (used for quorum N).
+            ProbeNode::recordSeen($nodeId);
+
+            // Store the check result.
             CheckResult::create([
                 'monitor_id' => $monitorId,
                 'node_id' => $nodeId,
+                'round_id' => $roundId,
                 'is_up' => $isUp,
                 'response_time_ms' => $responseTime,
                 'status_code' => $statusCode,
                 'error_message' => $errorMessage,
             ]);
 
-            // Update monitor status with threshold logic
             $monitor = Monitor::find($monitorId);
             if (! $monitor) {
                 return;
             }
 
-            $previousStatus = $monitor->status;
-
-            if ($isUp) {
-                // Success: reset failures and mark as up
-                $wasDown = $monitor->status === 'down';
-
-                $monitor->update([
-                    'status' => 'up',
-                    'last_checked_at' => now(),
-                    'last_error' => null,
-                    'consecutive_failures' => 0,
-                ]);
-
-                // Send recovery notification if was previously down
-                if ($wasDown) {
-                    $this->notifyRecovery($monitor);
-                }
-            } else {
-                // Failure: increment counter, only mark down after threshold
-                $consecutiveFailures = $monitor->consecutive_failures + 1;
-                $threshold = $monitor->failure_threshold ?? 1;
-
-                $newStatus = $consecutiveFailures >= $threshold ? 'down' : $monitor->status;
-
-                $monitor->update([
-                    'status' => $newStatus,
-                    'last_checked_at' => now(),
-                    'last_error' => $errorMessage,
-                    'consecutive_failures' => $consecutiveFailures,
-                ]);
-
-                // Send down notification only when crossing the threshold
-                if ($previousStatus !== 'down' && $newStatus === 'down') {
-                    $this->notifyDown($monitor, $errorMessage);
-                }
+            // Always bump "last checked" and capture the latest error so the
+            // monitor show page reflects the freshest info from any probe.
+            $monitor->last_checked_at = now();
+            if (! $isUp) {
+                $monitor->last_error = $errorMessage;
             }
+
+            if ($roundId) {
+                $this->resolveRound($monitor, $roundId);
+            } else {
+                // Backward compat: no round_id on this result (old probe or
+                // direct dispatch). Fall back to Phase 1 single-observer logic.
+                $this->resolveSingle($monitor, $isUp, $errorMessage);
+            }
+
+            $monitor->save();
         });
+    }
+
+    /**
+     * Cross-probe quorum: decide the monitor's status based on all results
+     * accumulated so far for this round. Updates the monitor in place and
+     * sends notifications on status transitions.
+     */
+    private function resolveRound(Monitor $monitor, string $roundId): void
+    {
+        // Skip if we've already decided for this round.
+        if ($monitor->last_decided_round_id === $roundId) {
+            return;
+        }
+
+        $activeProbes = max(1, ProbeNode::activeCount());
+        $majority = intdiv($activeProbes, 2) + 1;
+
+        $results = CheckResult::query()
+            ->where('monitor_id', $monitor->id)
+            ->where('round_id', $roundId)
+            ->get();
+
+        $upCount = $results->where('is_up', true)->count();
+        $downCount = $results->where('is_up', false)->count();
+        $received = $results->count();
+
+        $decision = null;
+        if ($downCount >= $majority) {
+            $decision = 'down';
+        } elseif ($upCount >= $majority) {
+            $decision = 'up';
+        } elseif ($received >= $activeProbes) {
+            // Everyone replied but no majority. Pick the more frequent
+            // observation; tie goes to 'up' (benefit of the doubt).
+            $decision = $downCount > $upCount ? 'down' : 'up';
+        }
+
+        if ($decision === null) {
+            // Waiting for more probes to report in this round.
+            return;
+        }
+
+        $previousStatus = $monitor->status;
+
+        if ($decision === 'up') {
+            $wasDown = $previousStatus === 'down';
+            $monitor->status = 'up';
+            $monitor->last_error = null;
+            $monitor->consecutive_failures = 0;
+            $monitor->last_decided_round_id = $roundId;
+
+            if ($wasDown) {
+                $this->notifyRecovery($monitor);
+            }
+        } else {
+            // down
+            $monitor->consecutive_failures = $monitor->consecutive_failures + 1;
+            $threshold = $monitor->failure_threshold ?? 1;
+
+            if ($monitor->consecutive_failures >= $threshold && $previousStatus !== 'down') {
+                $monitor->status = 'down';
+                $this->notifyDown($monitor, $monitor->last_error);
+            }
+
+            $monitor->last_decided_round_id = $roundId;
+        }
+    }
+
+    /**
+     * Phase-1 fallback for results without a round_id (legacy probes or
+     * results dispatched outside the normal flow).
+     */
+    private function resolveSingle(Monitor $monitor, bool $isUp, ?string $errorMessage): void
+    {
+        if ($isUp) {
+            $wasDown = $monitor->status === 'down';
+            $monitor->status = 'up';
+            $monitor->last_error = null;
+            $monitor->consecutive_failures = 0;
+
+            if ($wasDown) {
+                $this->notifyRecovery($monitor);
+            }
+
+            return;
+        }
+
+        $monitor->consecutive_failures = $monitor->consecutive_failures + 1;
+        $threshold = $monitor->failure_threshold ?? 1;
+        $previousStatus = $monitor->status;
+
+        if ($monitor->consecutive_failures >= $threshold && $previousStatus !== 'down') {
+            $monitor->status = 'down';
+            $this->notifyDown($monitor, $errorMessage);
+        }
     }
 
     /**
