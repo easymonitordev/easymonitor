@@ -4,7 +4,7 @@ FROM php:8.4-fpm-alpine
 RUN apk add --no-cache \
       $PHPIZE_DEPS \
       linux-headers \
-      supervisor bash postgresql-dev nodejs npm iputils \
+      supervisor bash postgresql-dev postgresql-client redis nodejs npm iputils \
  && docker-php-ext-install -j$(nproc) \
       pdo_pgsql pgsql opcache sockets bcmath pcntl \
  && pecl install redis \
