@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\HealthController;
 use App\Http\Controllers\PublicStatusPageController;
 use App\Livewire\Dashboard;
 use App\Livewire\Monitors\Create as MonitorsCreate;
@@ -29,6 +30,7 @@ use Laravel\Fortify\Features;
 // Caddy on-demand TLS ask endpoint
 Route::get('/caddy/ask', [PublicStatusPageController::class, 'caddyAsk'])->name('caddy.ask');
 
+
 // Home — if Host matches a verified custom_domain, render the status page;
 // otherwise show the welcome page.
 Route::get('/', function (\Illuminate\Http\Request $request) {
@@ -47,6 +49,10 @@ Route::get('/status/{slug}', [PublicStatusPageController::class, 'show'])->name(
 Route::get('dashboard', Dashboard::class)
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
+
+// App-level health dashboard (DB, Redis, monitoring loop, probes).
+// Returns JSON if the client asks for it, rich HTML for browsers.
+Route::get('/healthz', HealthController::class)->name('healthz');
 
 Route::middleware(['auth'])->group(function () {
     Route::redirect('settings', 'settings/profile');
