@@ -72,10 +72,13 @@ random_string() {
 
 detect_public_ip() {
     # Try a few services; first one that responds wins. Empty if all fail.
-    for svc in "https://ifconfig.net" "https://ifconfig.me" "https://api.ipify.org"; do
+    # Try a few IPv4-only services; first one that responds wins.
+    # -4 forces IPv4 on the local end, and these services return IPv4
+    # so we don't accidentally grab an AAAA address on dual-stack hosts.
+    for svc in "https://api.ipify.org" "https://ipv4.icanhazip.com" "https://v4.ident.me" "https://ifconfig.me" "https://ifconfig.net"; do
         local ip
-        ip=$(curl -fsS --max-time 5 "$svc" 2>/dev/null | tr -d '[:space:]')
-        if [[ "$ip" =~ ^[0-9.]+$ || "$ip" =~ ^[0-9a-fA-F:]+$ ]]; then
+        ip=$(curl -4 -fsS --max-time 5 "$svc" 2>/dev/null | tr -d '[:space:]')
+        if [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "$ip"
             return 0
         fi
