@@ -99,31 +99,17 @@ When it finishes, open the URL it prints. The first user can register and become
 
 ## Adding a probe in another region
 
-A local probe runs by default. To add probes in other regions:
+A local probe runs by default. To add probes in other regions, they need a network path to the server's Redis. **Never expose Redis directly on the public internet** — use a private network tunnel instead.
 
-### 1. Generate a token on the server
+Supported options:
 
-```bash
-docker compose exec php php artisan probe:generate-token \
-  --node-id=us-east-1 \
-  --tags=us-east-1,production \
-  --expires=365
-```
+- **Tailscale** (recommended) — two commands on server and probe, done
+- **Cloudflare Tunnel** — free, zero ports exposed
+- **Manual** — SSH tunnel, WireGuard, your own VPN
 
-Copy the token it prints.
+The `setup.sh` installer has a "Will you run probes on other machines?" prompt that auto-installs Tailscale on the server if you pick that option.
 
-### 2. Run the probe on a remote machine
-
-```bash
-docker run -d --restart=unless-stopped \
-  -e NODE_ID="us-east-1" \
-  -e REDIS_URL="rediss://your-redis-host:6380/0" \
-  -e REDIS_PASSWORD="your-redis-password" \
-  -e JWT_TOKEN="<token-from-step-1>" \
-  easymonitor/probe-node:latest
-```
-
-The probe authenticates and starts pulling checks within seconds. Use `rediss://` (TLS) for Redis exposed over the public internet.
+Full step-by-step (including the probe side) is in [PROBE_NODE_SETUP.md](PROBE_NODE_SETUP.md).
 
 To disable the bundled local probe:
 

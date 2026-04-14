@@ -1,0 +1,16 @@
+# Compose override: exposes Redis on the host so remote probes can connect via a tunnel.
+#
+# Enabled automatically by setup.sh when the operator picks a tunnel option.
+#
+# The bind host is taken from REDIS_BIND_HOST in .env:
+#   - 100.x.y.z  — Tailscale IP (recommended; only tailnet peers can reach it)
+#   - 127.0.0.1  — localhost only (used with Cloudflare Tunnel / cloudflared running on the host)
+#   - 0.0.0.0    — all interfaces (requires strict firewall rules)
+#
+# Do NOT set REDIS_BIND_HOST to 0.0.0.0 unless you know the host firewall
+# blocks port 6379 from the public internet.
+
+services:
+    redis:
+        ports:
+            - "${REDIS_BIND_HOST:-127.0.0.1}:6379:6379"
