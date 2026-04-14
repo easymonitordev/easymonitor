@@ -337,12 +337,14 @@ case "$MAIL_CHOICE" in
         FROM_NAME=$(ask "From name" "$APP_NAME")
         set_env MAIL_FROM_ADDRESS "\"$FROM\""
         set_env MAIL_FROM_NAME "\"$FROM_NAME\""
-        AWS_KEY=$(ask "AWS Access Key ID" "")
-        AWS_SECRET=$(ask_secret "AWS Secret Access Key")
-        AWS_REGION=$(ask "AWS region" "us-east-1")
-        set_env AWS_ACCESS_KEY_ID "$AWS_KEY"
-        set_env AWS_SECRET_ACCESS_KEY "$AWS_SECRET"
-        set_env AWS_DEFAULT_REGION "$AWS_REGION"
+        AWS_KEY_INPUT=$(ask "AWS Access Key ID" "")
+        AWS_SECRET_INPUT=$(ask_secret "AWS Secret Access Key")
+        AWS_REGION_INPUT=$(ask "AWS region (e.g. us-east-1, eu-west-1)" "us-east-1")
+        # AWS_* covers every AWS service (SES, S3, etc).
+        # Cloudflare R2 has its own R2_* namespace below.
+        set_env AWS_ACCESS_KEY_ID "$AWS_KEY_INPUT"
+        set_env AWS_SECRET_ACCESS_KEY "$AWS_SECRET_INPUT"
+        set_env AWS_DEFAULT_REGION "$AWS_REGION_INPUT"
         ok "SES configured."
         ;;
     3)
@@ -382,35 +384,40 @@ done
 case "$STORE_CHOICE" in
     2)
         info "Cloudflare R2 (S3-compatible)."
-        R2_ACCOUNT=$(ask "Cloudflare account ID" "")
-        R2_BUCKET=$(ask "R2 bucket name" "")
-        R2_KEY=$(ask "R2 access key ID" "")
-        R2_SECRET=$(ask_secret "R2 secret access key")
-        R2_PUBLIC=$(ask "Public URL (e.g. https://cdn.example.com — leave blank if private)" "")
+        R2_ACCOUNT_INPUT=$(ask "Cloudflare account ID" "")
+        R2_BUCKET_INPUT=$(ask "R2 bucket name" "")
+        R2_KEY_INPUT=$(ask "R2 access key" "")
+        R2_SECRET_INPUT=$(ask_secret "R2 secret key")
+        R2_PUBLIC_INPUT=$(ask "Public URL (e.g. https://cdn.example.com — leave blank if private)" "")
 
-        set_env FILESYSTEM_DISK "s3"
-        set_env AWS_ACCESS_KEY_ID "$R2_KEY"
-        set_env AWS_SECRET_ACCESS_KEY "$R2_SECRET"
-        set_env AWS_DEFAULT_REGION "auto"
-        set_env AWS_BUCKET "$R2_BUCKET"
-        set_env AWS_ENDPOINT "https://${R2_ACCOUNT}.r2.cloudflarestorage.com"
-        set_env AWS_USE_PATH_STYLE_ENDPOINT "true"
-        [ -n "$R2_PUBLIC" ] && set_env AWS_URL "$R2_PUBLIC"
+        # R2 has its own dedicated namespace so it never collides with AWS
+        # (SES, S3, etc.) credentials. The 'r2' filesystem disk in
+        # config/filesystems.php reads these R2_* env vars.
+        set_env FILESYSTEM_DISK "r2"
+        set_env R2_ACCESS_KEY "$R2_KEY_INPUT"
+        set_env R2_SECRET_KEY "$R2_SECRET_INPUT"
+        set_env R2_BUCKET "$R2_BUCKET_INPUT"
+        set_env R2_ENDPOINT "https://${R2_ACCOUNT_INPUT}.r2.cloudflarestorage.com"
+        [ -n "$R2_PUBLIC_INPUT" ] && set_env R2_URL "$R2_PUBLIC_INPUT"
         ok "R2 configured."
         ;;
     3)
         info "Amazon S3."
-        S3_BUCKET=$(ask "S3 bucket name" "")
-        S3_REGION=$(ask "S3 region" "us-east-1")
-        S3_KEY=$(ask "AWS Access Key ID (or reuse SES creds — leave blank to reuse)" "")
-        if [ -n "$S3_KEY" ]; then
-            S3_SECRET=$(ask_secret "AWS Secret Access Key")
-            set_env AWS_ACCESS_KEY_ID "$S3_KEY"
-            set_env AWS_SECRET_ACCESS_KEY "$S3_SECRET"
+        S3_BUCKET_INPUT=$(ask "S3 bucket name" "")
+        # Reuse the AWS_* credentials already written by the SES flow (if any).
+        # If not set yet, prompt now; otherwise just ask for the bucket.
+        if ! grep -q '^AWS_ACCESS_KEY_ID=.' .env 2>/dev/null; then
+            S3_KEY_INPUT=$(ask "AWS Access Key ID" "")
+            S3_SECRET_INPUT=$(ask_secret "AWS Secret Access Key")
+            S3_REGION_INPUT=$(ask "AWS region" "us-east-1")
+            set_env AWS_ACCESS_KEY_ID "$S3_KEY_INPUT"
+            set_env AWS_SECRET_ACCESS_KEY "$S3_SECRET_INPUT"
+            set_env AWS_DEFAULT_REGION "$S3_REGION_INPUT"
+        else
+            info "Reusing AWS credentials already configured."
         fi
         set_env FILESYSTEM_DISK "s3"
-        set_env AWS_BUCKET "$S3_BUCKET"
-        set_env AWS_DEFAULT_REGION "$S3_REGION"
+        set_env AWS_BUCKET "$S3_BUCKET_INPUT"
         set_env AWS_USE_PATH_STYLE_ENDPOINT "false"
         ok "S3 configured."
         ;;
