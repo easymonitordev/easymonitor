@@ -36,7 +36,7 @@ func (c *Consumer) EnsureConsumerGroup(ctx context.Context) error {
 		ctx,
 		c.cfg.CheckStream,
 		c.cfg.ConsumerGroup,
-		"0",
+		"$",
 	).Err()
 
 	if err != nil && err.Error() != "BUSYGROUP Consumer Group name already exists" {
