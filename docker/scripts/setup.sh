@@ -8,10 +8,20 @@ echo ""
 
 # Wait for database to be ready
 echo "[1/6] Waiting for database to be ready..."
-until PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -U "$DB_USERNAME" -d "$DB_DATABASE" -c '\q' 2>/dev/null; do
-  echo "  ⏳ PostgreSQL is unavailable - waiting..."
+ATTEMPTS=0
+until PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -U "$DB_USERNAME" -d "$DB_DATABASE" -c '\q' 2>/tmp/psql_err; do
+  ATTEMPTS=$((ATTEMPTS + 1))
+  echo "  ⏳ PostgreSQL not ready yet (attempt $ATTEMPTS) - waiting..."
+  if [ $ATTEMPTS -ge 10 ]; then
+    echo "  ❌ PostgreSQL still unreachable after $ATTEMPTS attempts. Last error:"
+    cat /tmp/psql_err
+    echo ""
+    echo "  DB_HOST=$DB_HOST DB_USERNAME=$DB_USERNAME DB_DATABASE=$DB_DATABASE"
+    exit 1
+  fi
   sleep 2
 done
+rm -f /tmp/psql_err
 echo "  ✓ PostgreSQL is ready!"
 echo ""
 
