@@ -35,6 +35,11 @@ func (p *Publisher) Publish(ctx context.Context, result *types.CheckResult) erro
 		"ms":       strconv.Itoa(result.ResponseTime),
 	}
 
+	// Echo round_id so the server can group per-probe results for quorum.
+	if result.RoundID != "" {
+		fields["round_id"] = result.RoundID
+	}
+
 	// Add optional fields
 	if result.StatusCode > 0 {
 		fields["status_code"] = strconv.Itoa(result.StatusCode)

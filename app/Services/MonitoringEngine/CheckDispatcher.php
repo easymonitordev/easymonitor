@@ -67,14 +67,19 @@ class CheckDispatcher
      */
     public function dispatchCheck(Monitor $monitor): string
     {
-        // XADD checks * check_id=42 url=https://... timeout=5000
+        // round_id groups all probe results for the same dispatched check
+        // so ResultConsumer can apply quorum across probes.
+        $roundId = (string) \Illuminate\Support\Str::uuid();
+
+        // XADD checks * check_id=42 url=... timeout=... round_id=...
         $entryId = Redis::connection('streams')->xadd(
             self::STREAM_CHECKS,
             '*', // Auto-generate ID
             [
                 'check_id' => (string) $monitor->id,
                 'url' => $monitor->url,
-                'timeout' => (string) ($monitor->check_interval * 1000), // Convert to milliseconds
+                'timeout' => (string) ($monitor->check_interval * 1000), // milliseconds
+                'round_id' => $roundId,
             ]
         );
 

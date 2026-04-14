@@ -32,6 +32,7 @@ class Monitor extends Model
         'last_error',
         'consecutive_failures',
         'failure_threshold',
+        'last_decided_round_id',
     ];
 
     /**

@@ -255,6 +255,7 @@ class StatusPage extends Model
                     ->with('latestCheckResult')
                     ->whereNotIn('id', $excludedIds)
                     ->where('is_active', true)
+                    ->orderBy('id')
                     ->get();
 
                 return [

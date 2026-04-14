@@ -43,7 +43,6 @@ func LoadFromEnv() (*Config, error) {
 		// Defaults
 		CheckStream:      "checks",
 		ResultStream:     "results",
-		ConsumerGroup:    "probes",
 		BlockTimeout:     5 * time.Second,
 		BatchSize:        10,
 		DefaultTimeout:   30 * time.Second,
@@ -57,6 +56,10 @@ func LoadFromEnv() (*Config, error) {
 	if cfg.NodeID == "" {
 		return nil, fmt.Errorf("NODE_ID environment variable is required")
 	}
+
+	// Each probe has its own consumer group so it independently receives
+	// every check — enabling cross-probe quorum on the server side.
+	cfg.ConsumerGroup = fmt.Sprintf("probe-%s", cfg.NodeID)
 
 	cfg.RedisURL = os.Getenv("REDIS_URL")
 	if cfg.RedisURL == "" {
