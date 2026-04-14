@@ -443,7 +443,18 @@ if $IS_PROD; then
     ok "Caddyfile.production updated for ${DOMAIN}"
 
     # Ensure docker compose uses the production override automatically.
-    set_env COMPOSE_FILE "docker-compose.yml:docker-compose.production.yml"
+    # Merge with whatever is already set (e.g. remote-probes override added
+    # earlier in this script) so we don't clobber previous choices.
+    CURRENT_CF=$(grep -E '^COMPOSE_FILE=' .env 2>/dev/null | head -n1 | cut -d= -f2- || echo "")
+    [ -z "$CURRENT_CF" ] && CURRENT_CF="docker-compose.yml"
+    if [[ "$CURRENT_CF" != *"production.yml"* ]]; then
+        # Insert production.yml right after the base compose file so its
+        # overrides apply before any later overrides (e.g. remote-probes).
+        CURRENT_CF=$(echo "$CURRENT_CF" | sed 's|^docker-compose.yml|docker-compose.yml:docker-compose.production.yml|')
+        # Guard: if the base file wasn't first, just prepend production
+        [[ "$CURRENT_CF" != *"production.yml"* ]] && CURRENT_CF="docker-compose.yml:docker-compose.production.yml:${CURRENT_CF}"
+    fi
+    set_env COMPOSE_FILE "$CURRENT_CF"
     ok "COMPOSE_FILE set so production overrides apply by default."
 fi
 
