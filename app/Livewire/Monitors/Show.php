@@ -115,6 +115,7 @@ class Show extends Component
         $count = count($list);
 
         $isHealthy = fn (?array $b) => $b !== null && $b['total'] > 0 && $b['down'] === 0;
+        $isFailing = fn (?array $b) => $b !== null && $b['down'] > 0;
 
         for ($i = 0; $i < $count; $i++) {
             if ($list[$i]['total'] !== 0) {
@@ -124,7 +125,13 @@ class Show extends Component
             $prev = $list[$i - 1] ?? null;
             $next = $list[$i + 1] ?? null;
 
-            if ($isHealthy($prev) && $isHealthy($next)) {
+            // Don't smooth across a real failure — we want to preserve gaps next to outages.
+            if ($isFailing($prev) || $isFailing($next)) {
+                continue;
+            }
+
+            // Smooth if at least one neighbor is healthy data (covers edges and drift gaps).
+            if ($isHealthy($prev) || $isHealthy($next)) {
                 $list[$i]['total'] = 1;
                 $list[$i]['up'] = 1;
             }
