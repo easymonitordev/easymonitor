@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Livewire;
 
 use App\Models\CheckResult;
+use App\Models\Incident;
 use App\Models\Monitor;
 use Livewire\Component;
 
@@ -62,14 +63,32 @@ class Dashboard extends Component
             ? round(($successfulChecks24h / $totalChecks24h) * 100, 2)
             : null;
 
-        // Recent incidents (last 10 down results)
-        $recentIncidents = CheckResult::query()
+        // Real incidents (quorum-decided) in the last 24h, plus any still ongoing.
+        $incidentsQuery = Incident::query()
             ->whereIn('monitor_id', $monitorIds)
-            ->where('is_up', false)
+            ->where(function ($q) {
+                $q->where('started_at', '>=', now()->subDay())
+                  ->orWhereNull('ended_at');
+            })
             ->with('monitor')
-            ->latest()
-            ->limit(10)
-            ->get();
+            ->orderByDesc('started_at');
+
+        $recentIncidents = (clone $incidentsQuery)->limit(10)->get();
+
+        $monitorsDegraded = Incident::query()
+            ->whereIn('monitor_id', $monitorIds)
+            ->where('severity', Incident::SEVERITY_DEGRADED)
+            ->whereNull('ended_at')
+            ->distinct('monitor_id')
+            ->count('monitor_id');
+
+        $downIncidentsCount = (clone $incidentsQuery)
+            ->where('severity', Incident::SEVERITY_DOWN)
+            ->count();
+
+        $degradedIncidentsCount = (clone $incidentsQuery)
+            ->where('severity', Incident::SEVERITY_DEGRADED)
+            ->count();
 
         return view('livewire.dashboard', [
             'monitors' => $monitors,
@@ -77,10 +96,13 @@ class Dashboard extends Component
             'activeMonitors' => $activeMonitors,
             'monitorsUp' => $monitorsUp,
             'monitorsDown' => $monitorsDown,
+            'monitorsDegraded' => $monitorsDegraded,
             'monitorsPending' => $monitorsPending,
             'avgResponseTime' => $avgResponseTime,
             'uptimePercentage' => $uptimePercentage,
             'recentIncidents' => $recentIncidents,
+            'downIncidentsCount' => $downIncidentsCount,
+            'degradedIncidentsCount' => $degradedIncidentsCount,
         ]);
     }
 }

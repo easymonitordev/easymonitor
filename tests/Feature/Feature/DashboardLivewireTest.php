@@ -56,8 +56,10 @@ test('dashboard shows recent incidents', function () {
         'name' => 'Failing Site',
     ]);
 
-    CheckResult::factory()->down()->create([
+    \App\Models\Incident::factory()->create([
         'monitor_id' => $monitor->id,
+        'severity' => \App\Models\Incident::SEVERITY_DOWN,
+        'started_at' => now()->subMinutes(3),
         'error_message' => 'Connection timeout',
     ]);
 
