@@ -141,4 +141,20 @@ class Monitor extends Model
     {
         return $this->hasOne(CheckResult::class)->latestOfMany();
     }
+
+    /**
+     * Get all incidents (downtimes) for this monitor
+     */
+    public function incidents(): HasMany
+    {
+        return $this->hasMany(Incident::class);
+    }
+
+    /**
+     * Get the currently ongoing incident, if any
+     */
+    public function ongoingIncident(): HasOne
+    {
+        return $this->hasOne(Incident::class)->whereNull('ended_at')->latestOfMany('started_at');
+    }
 }

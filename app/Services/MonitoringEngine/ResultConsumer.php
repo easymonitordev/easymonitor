@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\MonitoringEngine;
 
 use App\Models\CheckResult;
+use App\Models\Incident;
 use App\Models\Monitor;
 use App\Models\ProbeNode;
 use App\Notifications\MonitorDown;
@@ -212,6 +213,8 @@ class ResultConsumer
 
         $previousStatus = $monitor->status;
 
+        $downNodes = $results->where('is_up', false)->pluck('node_id')->unique()->values()->all();
+
         if ($decision === 'up') {
             $wasDown = $previousStatus === 'down';
             $monitor->status = 'up';
@@ -221,6 +224,12 @@ class ResultConsumer
 
             if ($wasDown) {
                 $this->notifyRecovery($monitor);
+            } elseif (! empty($downNodes)) {
+                // Quorum said up, but some probes failed — track as a degraded event.
+                $this->trackDegraded($monitor, $results, $downNodes);
+            } else {
+                // All probes up on this round → full recovery of any degraded state.
+                $this->closeDegraded($monitor);
             }
         } else {
             // down
@@ -229,7 +238,7 @@ class ResultConsumer
 
             if ($monitor->consecutive_failures >= $threshold && $previousStatus !== 'down') {
                 $monitor->status = 'down';
-                $this->notifyDown($monitor, $monitor->last_error);
+                $this->notifyDown($monitor, $monitor->last_error, $downNodes);
             }
 
             $monitor->last_decided_round_id = $roundId;
@@ -261,15 +270,20 @@ class ResultConsumer
 
         if ($monitor->consecutive_failures >= $threshold && $previousStatus !== 'down') {
             $monitor->status = 'down';
-            $this->notifyDown($monitor, $errorMessage);
+            $this->notifyDown($monitor, $errorMessage, []);
         }
     }
 
     /**
      * Send a notification that a monitor is down
      */
-    private function notifyDown(Monitor $monitor, ?string $errorMessage): void
+    /**
+     * @param  array<int, string>  $affectedNodes
+     */
+    private function notifyDown(Monitor $monitor, ?string $errorMessage, array $affectedNodes): void
     {
+        $this->openIncident($monitor, $errorMessage, $affectedNodes);
+
         try {
             $monitor->user->notify(new MonitorDown($monitor, $errorMessage));
 
@@ -290,6 +304,8 @@ class ResultConsumer
      */
     private function notifyRecovery(Monitor $monitor): void
     {
+        $this->closeIncident($monitor);
+
         try {
             $monitor->user->notify(new MonitorRecovered($monitor));
 
@@ -303,6 +319,139 @@ class ResultConsumer
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Open a new down-severity incident for this monitor, or upgrade an
+     * ongoing degraded incident to "down" if one exists.
+     *
+     * @param  array<int, string>  $affectedNodes
+     */
+    private function openIncident(Monitor $monitor, ?string $errorMessage, array $affectedNodes): void
+    {
+        $latestDown = CheckResult::query()
+            ->where('monitor_id', $monitor->id)
+            ->where('is_up', false)
+            ->latest('created_at')
+            ->first();
+
+        $ongoing = Incident::query()
+            ->where('monitor_id', $monitor->id)
+            ->whereNull('ended_at')
+            ->latest('started_at')
+            ->first();
+
+        if ($ongoing?->severity === Incident::SEVERITY_DOWN) {
+            return;
+        }
+
+        if ($ongoing?->severity === Incident::SEVERITY_DEGRADED) {
+            // Escalate: the same downtime window started as partial and is now full.
+            $ongoing->severity = Incident::SEVERITY_DOWN;
+            $ongoing->error_message = $errorMessage ?? $latestDown?->error_message ?? $ongoing->error_message;
+            $ongoing->status_code = $latestDown?->status_code ?? $ongoing->status_code;
+            $ongoing->trigger_node_id = $latestDown?->node_id ?? $ongoing->trigger_node_id;
+            $ongoing->affected_node_ids = $this->mergeAffectedNodes($ongoing->affected_node_ids, $affectedNodes);
+            $ongoing->save();
+
+            return;
+        }
+
+        Incident::create([
+            'monitor_id' => $monitor->id,
+            'severity' => Incident::SEVERITY_DOWN,
+            'started_at' => now(),
+            'error_message' => $errorMessage ?? $latestDown?->error_message,
+            'status_code' => $latestDown?->status_code,
+            'trigger_node_id' => $latestDown?->node_id,
+            'affected_node_ids' => ! empty($affectedNodes) ? array_values($affectedNodes) : null,
+        ]);
+    }
+
+    /**
+     * Open or extend a degraded incident for a round where only some probes failed.
+     *
+     * @param  \Illuminate\Support\Collection<int, CheckResult>  $results
+     * @param  array<int, string>  $downNodes
+     */
+    private function trackDegraded(Monitor $monitor, $results, array $downNodes): void
+    {
+        $ongoing = Incident::query()
+            ->where('monitor_id', $monitor->id)
+            ->whereNull('ended_at')
+            ->latest('started_at')
+            ->first();
+
+        if ($ongoing?->severity === Incident::SEVERITY_DOWN) {
+            // An active down-incident supersedes any degraded signal; leave it alone.
+            return;
+        }
+
+        $failing = $results->where('is_up', false)->first();
+
+        if ($ongoing?->severity === Incident::SEVERITY_DEGRADED) {
+            $ongoing->affected_node_ids = $this->mergeAffectedNodes($ongoing->affected_node_ids, $downNodes);
+            if ($failing && ! $ongoing->error_message) {
+                $ongoing->error_message = $failing->error_message;
+            }
+            $ongoing->save();
+
+            return;
+        }
+
+        Incident::create([
+            'monitor_id' => $monitor->id,
+            'severity' => Incident::SEVERITY_DEGRADED,
+            'started_at' => now(),
+            'error_message' => $failing?->error_message,
+            'status_code' => $failing?->status_code,
+            'trigger_node_id' => $failing?->node_id,
+            'affected_node_ids' => array_values($downNodes),
+        ]);
+    }
+
+    /**
+     * Close the ongoing down-incident (called on full recovery from quorum-down).
+     */
+    private function closeIncident(Monitor $monitor): void
+    {
+        $ongoing = Incident::query()
+            ->where('monitor_id', $monitor->id)
+            ->whereNull('ended_at')
+            ->latest('started_at')
+            ->first();
+
+        $ongoing?->close(now());
+    }
+
+    /**
+     * Close the ongoing degraded incident (called when all probes report up).
+     */
+    private function closeDegraded(Monitor $monitor): void
+    {
+        $ongoing = Incident::query()
+            ->where('monitor_id', $monitor->id)
+            ->where('severity', Incident::SEVERITY_DEGRADED)
+            ->whereNull('ended_at')
+            ->latest('started_at')
+            ->first();
+
+        $ongoing?->close(now());
+    }
+
+    /**
+     * Merge a new list of affected node ids into an existing (possibly null) list.
+     *
+     * @param  array<int, string>|null  $existing
+     * @param  array<int, string>  $incoming
+     * @return array<int, string>
+     */
+    private function mergeAffectedNodes(?array $existing, array $incoming): array
+    {
+        $merged = array_values(array_unique(array_merge($existing ?? [], $incoming)));
+        sort($merged);
+
+        return $merged;
     }
 
     /**

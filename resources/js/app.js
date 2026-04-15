@@ -1,3 +1,6 @@
+import Chart from 'chart.js/auto';
+window.Chart = Chart;
+
 // Theme management
 const themeManager = {
     init() {

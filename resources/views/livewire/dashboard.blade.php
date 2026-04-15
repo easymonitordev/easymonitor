@@ -6,11 +6,21 @@
 
     <!-- Overall Status Banner -->
     @if ($totalMonitors > 0)
-        <div class="mb-6 rounded-xl p-4 border {{ $monitorsDown > 0 ? 'bg-error/10 border-error/30' : 'bg-success/10 border-success/30' }}">
-            <div class="flex items-center gap-3">
+        @php($bannerClasses = $monitorsDown > 0
+            ? 'bg-error/10 border-error/30'
+            : ($monitorsDegraded > 0 ? 'bg-warning/10 border-warning/30' : 'bg-success/10 border-success/30'))
+        <div class="mb-6 rounded-xl p-4 border {{ $bannerClasses }}">
+            <div class="flex items-center gap-3 flex-wrap">
                 @if ($monitorsDown > 0)
                     <div class="w-3 h-3 rounded-full bg-error animate-pulse"></div>
                     <span class="font-semibold text-error">{{ $monitorsDown }} {{ trans_choice('monitor is down|monitors are down', $monitorsDown) }}</span>
+                    @if ($monitorsDegraded > 0)
+                        <span class="text-sm text-warning">&middot; {{ $monitorsDegraded }} {{ __('degraded') }}</span>
+                    @endif
+                @elseif ($monitorsDegraded > 0)
+                    <div class="w-3 h-3 rounded-full bg-warning animate-pulse"></div>
+                    <span class="font-semibold text-warning">{{ $monitorsDegraded }} {{ trans_choice('monitor is degraded|monitors are degraded', $monitorsDegraded) }}</span>
+                    <span class="text-sm text-base-content/60">{{ __('some probes failing') }}</span>
                 @else
                     <div class="w-3 h-3 rounded-full bg-success"></div>
                     <span class="font-semibold text-success">{{ __('All systems operational') }}</span>
@@ -83,8 +93,13 @@
                     </svg>
                 </div>
                 <div class="stat-title">{{ __('Incidents') }}</div>
-                <div class="stat-value text-2xl {{ $recentIncidents->count() > 0 ? 'text-error' : '' }}">{{ $recentIncidents->count() }}</div>
-                <div class="stat-desc">{{ __('Last 24 hours') }}</div>
+                <div class="stat-value text-2xl {{ $downIncidentsCount > 0 ? 'text-error' : ($degradedIncidentsCount > 0 ? 'text-warning' : '') }}">{{ $downIncidentsCount }}</div>
+                <div class="stat-desc">
+                    {{ __('Last 24 hours') }}
+                    @if ($degradedIncidentsCount > 0)
+                        <span class="text-warning">· {{ $degradedIncidentsCount }} {{ __('degraded') }}</span>
+                    @endif
+                </div>
             </div>
         </div>
     </div>
@@ -188,16 +203,37 @@
                     @else
                         <div class="space-y-0">
                             @foreach ($recentIncidents as $incident)
-                                <div class="flex items-start gap-3 py-2.5 {{ !$loop->last ? 'border-b border-base-200' : '' }}" wire:key="incident-{{ $incident->id }}-{{ $incident->created_at->timestamp }}">
-                                    <div class="w-5 h-5 rounded-full bg-error/10 flex items-center justify-center mt-0.5 shrink-0">
-                                        <div class="w-2 h-2 rounded-full bg-error"></div>
+                                @php($isDegraded = $incident->isDegraded())
+                                @php($isOngoing = $incident->isOngoing())
+                                @php($dotColor = $isDegraded ? 'bg-warning' : 'bg-error')
+                                @php($bgColor = $isDegraded ? 'bg-warning/10' : 'bg-error/10')
+                                <div class="flex items-start gap-3 py-2.5 {{ !$loop->last ? 'border-b border-base-200' : '' }}" wire:key="incident-{{ $incident->id }}">
+                                    <div class="w-5 h-5 rounded-full {{ $bgColor }} flex items-center justify-center mt-0.5 shrink-0">
+                                        <div class="w-2 h-2 rounded-full {{ $dotColor }} {{ $isOngoing ? 'animate-pulse' : '' }}"></div>
                                     </div>
                                     <div class="min-w-0 flex-1">
                                         <div class="flex items-center justify-between gap-2">
-                                            <span class="text-sm font-medium truncate">{{ $incident->monitor?->name ?? __('Deleted') }}</span>
-                                            <span class="text-xs text-base-content/40 shrink-0">{{ $incident->created_at->diffForHumans(short: true) }}</span>
+                                            <div class="flex items-center gap-2 min-w-0">
+                                                <span class="text-sm font-medium truncate">{{ $incident->monitor?->name ?? __('Deleted') }}</span>
+                                                @if ($isDegraded)
+                                                    <span class="badge badge-warning badge-xs">{{ __('Degraded') }}</span>
+                                                @else
+                                                    <span class="badge badge-error badge-xs">{{ __('Down') }}</span>
+                                                @endif
+                                            </div>
+                                            <span class="text-xs text-base-content/40 shrink-0">{{ $incident->started_at->diffForHumans(short: true) }}</span>
                                         </div>
-                                        <div class="text-xs text-base-content/50 truncate mt-0.5">{{ $incident->error_message ?? __('Check failed') }}</div>
+                                        <div class="text-xs text-base-content/50 truncate mt-0.5">
+                                            {{ $incident->error_message ?? __('Check failed') }}
+                                        </div>
+                                        @if (!empty($incident->affected_node_ids))
+                                            <div class="text-xs text-base-content/40 mt-0.5">
+                                                {{ __('Affected') }}:
+                                                @foreach ($incident->affected_node_ids as $node)
+                                                    <span class="font-mono">{{ $node }}</span>{{ !$loop->last ? ',' : '' }}
+                                                @endforeach
+                                            </div>
+                                        @endif
                                     </div>
                                 </div>
                             @endforeach
