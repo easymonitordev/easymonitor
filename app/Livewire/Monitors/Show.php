@@ -52,27 +52,38 @@ class Show extends Component
     }
 
     /**
+     * Bucket count target for the timeline chart.
+     */
+    private const CHART_BUCKETS = 80;
+
+    /**
      * Get the bucket interval and time format for the chart based on the period.
      *
-     * Bucket size grows to at least 2x the monitor's check interval so each
-     * bucket reliably contains at least one check (avoids empty-bucket gaps
-     * when checks drift across minute boundaries).
+     * Bucket size = period / CHART_BUCKETS so the chart always has a consistent
+     * number of bars. Empty buckets caused by check-time drift across boundaries
+     * are smoothed in post-processing rather than by inflating bucket size.
      *
      * @return array{string, string, string, int}
      */
     private function getChartConfig(): array
     {
-        $minBucket = max(60, ($this->monitor->check_interval ?? 60) * 2);
-
-        [$dateFormat, $defaultBucket] = match ($this->period) {
-            '1h' => ['H:i', 60],
-            '24h' => ['H:i', 1800],
-            '7d' => ['M d H:i', 10800],
-            '30d' => ['M d', 43200],
-            default => ['H:i', 1800],
+        $dateFormat = match ($this->period) {
+            '1h' => 'H:i',
+            '24h' => 'H:i',
+            '7d' => 'M d H:i',
+            '30d' => 'M d',
+            default => 'H:i',
         };
 
-        $bucketSeconds = max($defaultBucket, $minBucket);
+        $periodSeconds = match ($this->period) {
+            '1h' => 3600,
+            '24h' => 86400,
+            '7d' => 604800,
+            '30d' => 2592000,
+            default => 86400,
+        };
+
+        $bucketSeconds = max(30, intdiv($periodSeconds, self::CHART_BUCKETS));
         $intervalString = $bucketSeconds.' seconds';
 
         return ['', $dateFormat, $intervalString, $bucketSeconds];
@@ -83,14 +94,43 @@ class Show extends Component
      */
     private function getChartData(\Illuminate\Support\Carbon $periodStart): Collection
     {
-        $driver = DB::connection()->getDriverName();
-
-        if ($driver === 'pgsql') {
-            return $this->getChartDataPgsql($periodStart);
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            return collect();
         }
 
-        // SQLite fallback (tests)
-        return $this->getChartDataSqlite($periodStart);
+        return $this->smoothEmptyBuckets($this->getChartDataPgsql($periodStart));
+    }
+
+    /**
+     * Empty buckets between two healthy buckets are treated as "covered" — the
+     * gap is just probe timing drift across bucket boundaries, not a real outage.
+     * Empty buckets next to failures or other gaps are left alone.
+     *
+     * @param  Collection<int, array{time: string, total: int, up: int, down: int, failed_nodes: array<int, string>}>  $buckets
+     * @return Collection<int, array{time: string, total: int, up: int, down: int, failed_nodes: array<int, string>}>
+     */
+    private function smoothEmptyBuckets(Collection $buckets): Collection
+    {
+        $list = $buckets->values()->all();
+        $count = count($list);
+
+        $isHealthy = fn (?array $b) => $b !== null && $b['total'] > 0 && $b['down'] === 0;
+
+        for ($i = 0; $i < $count; $i++) {
+            if ($list[$i]['total'] !== 0) {
+                continue;
+            }
+
+            $prev = $list[$i - 1] ?? null;
+            $next = $list[$i + 1] ?? null;
+
+            if ($isHealthy($prev) && $isHealthy($next)) {
+                $list[$i]['total'] = 1;
+                $list[$i]['up'] = 1;
+            }
+        }
+
+        return collect($list);
     }
 
     /**
@@ -134,38 +174,6 @@ class Show extends Component
                 'failed_nodes' => $row->failed_nodes
                     ? array_values(array_unique(array_filter(explode(',', $row->failed_nodes))))
                     : [],
-            ];
-        });
-    }
-
-    /**
-     * SQLite fallback for tests: bucket in PHP using the same bucket size as pg.
-     *
-     * @return Collection<int, array{time: string, total: int, up: int, down: int, failed_nodes: array<int, string>}>
-     */
-    private function getChartDataSqlite(\Illuminate\Support\Carbon $periodStart): Collection
-    {
-        [, $dateFormat, , $bucketSeconds] = $this->getChartConfig();
-        $startTs = $periodStart->getTimestamp();
-
-        $byBucket = $this->monitor->checkResults()
-            ->where('created_at', '>=', $periodStart)
-            ->get()
-            ->groupBy(fn ($r) => $startTs + (intdiv($r->created_at->getTimestamp() - $startTs, $bucketSeconds) * $bucketSeconds));
-
-        return $this->buildBucketTimeline($periodStart, $bucketSeconds, $dateFormat, function (int $ts) use ($byBucket) {
-            $bucket = $byBucket->get($ts);
-            if (! $bucket) {
-                return null;
-            }
-
-            $down = $bucket->where('is_up', false);
-
-            return [
-                'total' => $bucket->count(),
-                'up' => $bucket->where('is_up', true)->count(),
-                'down' => $down->count(),
-                'failed_nodes' => $down->pluck('node_id')->unique()->values()->all(),
             ];
         });
     }
