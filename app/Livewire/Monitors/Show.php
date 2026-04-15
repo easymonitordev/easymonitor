@@ -54,18 +54,28 @@ class Show extends Component
     /**
      * Get the bucket interval and time format for the chart based on the period.
      *
+     * Bucket size grows to at least 2x the monitor's check interval so each
+     * bucket reliably contains at least one check (avoids empty-bucket gaps
+     * when checks drift across minute boundaries).
+     *
      * @return array{string, string, string, int}
      */
     private function getChartConfig(): array
     {
-        // [SQL truncation, PHP date format for label, pg interval string, bucket size in seconds]
-        return match ($this->period) {
-            '1h' => ['minute', 'H:i', '1 minute', 60],
-            '24h' => ['hour', 'H:i', '30 minutes', 1800],
-            '7d' => ['hour', 'M d H:i', '3 hours', 10800],
-            '30d' => ['day', 'M d', '12 hours', 43200],
-            default => ['hour', 'H:i', '30 minutes', 1800],
+        $minBucket = max(60, ($this->monitor->check_interval ?? 60) * 2);
+
+        [$dateFormat, $defaultBucket] = match ($this->period) {
+            '1h' => ['H:i', 60],
+            '24h' => ['H:i', 1800],
+            '7d' => ['M d H:i', 10800],
+            '30d' => ['M d', 43200],
+            default => ['H:i', 1800],
         };
+
+        $bucketSeconds = max($defaultBucket, $minBucket);
+        $intervalString = $bucketSeconds.' seconds';
+
+        return ['', $dateFormat, $intervalString, $bucketSeconds];
     }
 
     /**
