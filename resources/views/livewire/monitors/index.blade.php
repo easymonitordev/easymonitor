@@ -95,7 +95,7 @@
                                     @if ($monitor->latestCheckResult?->response_time_ms)
                                         <div class="text-right">
                                             <div class="font-medium text-base-content {{ $monitor->latestCheckResult->response_time_ms > 1000 ? 'text-warning' : '' }}">
-                                                {{ $monitor->latestCheckResult->response_time_ms }}ms
+                                                {{ \App\Support\Format::ms($monitor->latestCheckResult->response_time_ms) }}
                                             </div>
                                             <div class="text-xs text-base-content/40">{{ __('response') }}</div>
                                         </div>
