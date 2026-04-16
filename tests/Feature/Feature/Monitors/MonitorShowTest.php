@@ -73,24 +73,50 @@ test('monitor show page displays check results', function () {
         ->assertSee('local-node-1');
 });
 
-test('monitor show page displays uptime percentage', function () {
+test('monitor show page uptime reflects downtime duration not raw check rate', function () {
     $user = User::factory()->create();
     $monitor = Monitor::factory()->up()->create(['user_id' => $user->id]);
 
-    CheckResult::factory()->count(9)->create([
+    CheckResult::factory()->count(10)->create([
         'monitor_id' => $monitor->id,
         'is_up' => true,
     ]);
 
-    CheckResult::factory()->down()->create([
-        'monitor_id' => $monitor->id,
-    ]);
+    // A single-probe failure without a matching down-incident must not drag
+    // uptime down: 0 incidents = 100% uptime.
+    CheckResult::factory()->down()->create(['monitor_id' => $monitor->id]);
 
     $this->actingAs($user);
 
     Livewire::test(Show::class, ['monitor' => $monitor])
         ->assertSuccessful()
-        ->assertSee('90%'); // 9/10 = 90%
+        ->assertSee('100%');
+});
+
+test('monitor show page uptime drops when there is a real down incident', function () {
+    $user = User::factory()->create();
+    $monitor = Monitor::factory()->up()->create(['user_id' => $user->id]);
+
+    CheckResult::factory()->count(10)->create([
+        'monitor_id' => $monitor->id,
+        'is_up' => true,
+    ]);
+
+    // Resolved 6-minute down incident within the last 24h → 6/1440 = 0.42% downtime.
+    \App\Models\Incident::factory()->resolved()->create([
+        'monitor_id' => $monitor->id,
+        'severity' => \App\Models\Incident::SEVERITY_DOWN,
+        'started_at' => now()->subHour(),
+        'ended_at' => now()->subHour()->addMinutes(6),
+        'duration_seconds' => 360,
+    ]);
+
+    $this->actingAs($user);
+
+    $component = Livewire::test(Show::class, ['monitor' => $monitor])->assertSuccessful();
+
+    expect($component->viewData('uptimePercentage'))->toBeLessThan(100.0)
+        ->and($component->viewData('uptimePercentage'))->toBeGreaterThan(99.0);
 });
 
 test('monitor show page can change period', function () {

@@ -47,21 +47,38 @@ class Dashboard extends Component
 
         $avgResponseTime = $rawAvg !== null ? (int) round((float) $rawAvg) : null;
 
-        // Uptime percentage last 24h
-        $totalChecks24h = CheckResult::query()
+        // Uptime percentage last 24h — computed from real downtime duration
+        // (down-severity incidents), not raw probe success rate, so a single
+        // probe blip that never reached quorum doesn't affect the percentage.
+        $periodStart = now()->subDay();
+        $hasActivity = CheckResult::query()
             ->whereIn('monitor_id', $monitorIds)
-            ->where('created_at', '>=', now()->subDay())
-            ->count();
+            ->where('created_at', '>=', $periodStart)
+            ->exists();
 
-        $successfulChecks24h = CheckResult::query()
-            ->whereIn('monitor_id', $monitorIds)
-            ->where('is_up', true)
-            ->where('created_at', '>=', now()->subDay())
-            ->count();
+        if (! $hasActivity) {
+            $uptimePercentage = null;
+        } else {
+            $periodSeconds = max(1, now()->getTimestamp() - $periodStart->getTimestamp());
+            $monitorCount = max(1, $monitorIds->count());
 
-        $uptimePercentage = $totalChecks24h > 0
-            ? round(($successfulChecks24h / $totalChecks24h) * 100, 2)
-            : null;
+            $downSeconds = Incident::query()
+                ->whereIn('monitor_id', $monitorIds)
+                ->where('severity', Incident::SEVERITY_DOWN)
+                ->where(function ($q) use ($periodStart) {
+                    $q->whereNull('ended_at')
+                      ->orWhere('ended_at', '>=', $periodStart);
+                })
+                ->get(['started_at', 'ended_at'])
+                ->sum(function ($incident) use ($periodStart) {
+                    $start = $incident->started_at->greaterThan($periodStart) ? $incident->started_at : $periodStart;
+                    $end = $incident->ended_at ?? now();
+
+                    return max(0, $end->getTimestamp() - $start->getTimestamp());
+                });
+
+            $uptimePercentage = round(max(0, min(100, 100 - (($downSeconds / ($periodSeconds * $monitorCount)) * 100))), 2);
+        }
 
         // Real incidents (quorum-decided) in the last 24h, plus any still ongoing.
         $incidentsQuery = Incident::query()
