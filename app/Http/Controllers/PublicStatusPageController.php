@@ -134,7 +134,6 @@ class PublicStatusPageController extends Controller
             ->groupBy('monitor_id')
             ->pluck('oldest', 'monitor_id');
 
-        $now = now();
         $stats = [];
 
         foreach ($monitorIds as $monitorId) {
@@ -151,18 +150,51 @@ class PublicStatusPageController extends Controller
                 continue;
             }
 
-            $oldestCarbon = Carbon::parse($oldest);
-
-            if ($oldestCarbon->lte($now->copy()->subDays(60))) {
-                $stats[$monitorId] = $this->buildDailyTicks($monitorId);
-            } elseif ($oldestCarbon->lte($now->copy()->subMinutes(60))) {
-                $stats[$monitorId] = $this->buildHourlyTicks($monitorId);
-            } else {
-                $stats[$monitorId] = $this->buildMinuteTicks($monitorId);
-            }
+            $stats[$monitorId] = $this->buildAdaptiveTicks($monitorId, Carbon::parse($oldest));
         }
 
         return $stats;
+    }
+
+    /**
+     * Fit the timeline to the monitor's actual data span: window goes from the
+     * first recorded check (clamped to 60 days max) up to now, divided into
+     * 60 equal buckets. No hardcoded ranges, no empty padding.
+     *
+     * @return array{uptime: float|null, mode: string, from_label: string|null, ticks: array}
+     */
+    private function buildAdaptiveTicks(int $monitorId, Carbon $oldest): array
+    {
+        $now = now();
+        $maxStart = $now->copy()->subDays(60);
+        $minStart = $now->copy()->subMinutes(60);
+
+        // Clamp: cap at 60 days for performance; floor at 60 minutes so a fresh
+        // monitor doesn't get sub-second buckets.
+        $periodStart = $oldest->lessThan($maxStart) ? $maxStart : $oldest;
+        if ($periodStart->greaterThan($minStart)) {
+            $periodStart = $minStart;
+        }
+
+        $spanSeconds = max(60, $now->getTimestamp() - $periodStart->getTimestamp());
+        $bucketSeconds = max(1, intdiv($spanSeconds, 60));
+
+        // Pick a tooltip format proportional to the bucket width.
+        $tooltipFormat = match (true) {
+            $bucketSeconds >= 21600 => 'M j',          // 6h+: day-ish
+            $bucketSeconds >= 1800 => 'M j H:00',      // 30m+: hourly
+            default => 'M j H:i',
+        };
+
+        return $this->buildBucketedTicks(
+            monitorId: $monitorId,
+            periodStart: $periodStart,
+            bucketSeconds: $bucketSeconds,
+            bucketCount: 60,
+            tooltipFormat: $tooltipFormat,
+            fromLabel: $periodStart->diffForHumans(),
+            mode: 'adaptive',
+        );
     }
 
     /**
@@ -170,57 +202,6 @@ class PublicStatusPageController extends Controller
      *
      * @return array{uptime: float|null, mode: string, ticks: array}
      */
-    private function buildDailyTicks(int $monitorId): array
-    {
-        $start = now()->subDays(60)->startOfDay();
-
-        return $this->buildBucketedTicks(
-            monitorId: $monitorId,
-            periodStart: $start,
-            bucketSeconds: 86400,
-            bucketCount: 60,
-            tooltipFormat: 'M j',
-            fromLabel: $start->diffForHumans(),
-            mode: 'daily',
-        );
-    }
-
-    /**
-     * @return array{uptime: float|null, mode: string, ticks: array}
-     */
-    private function buildHourlyTicks(int $monitorId): array
-    {
-        $start = now()->subHours(60)->startOfHour();
-
-        return $this->buildBucketedTicks(
-            monitorId: $monitorId,
-            periodStart: $start,
-            bucketSeconds: 3600,
-            bucketCount: 60,
-            tooltipFormat: 'M j H:i',
-            fromLabel: $start->diffForHumans(),
-            mode: 'hourly',
-        );
-    }
-
-    /**
-     * @return array{uptime: float|null, mode: string, ticks: array}
-     */
-    private function buildMinuteTicks(int $monitorId): array
-    {
-        $start = now()->subMinutes(60)->startOfMinute();
-
-        return $this->buildBucketedTicks(
-            monitorId: $monitorId,
-            periodStart: $start,
-            bucketSeconds: 60,
-            bucketCount: 60,
-            tooltipFormat: 'H:i',
-            fromLabel: $start->diffForHumans(),
-            mode: 'minute',
-        );
-    }
-
     /**
      * Bucket check_results into a fixed-count timeline. Each tick carries a
      * status (up/partial/down/none) plus the up percentage so the view can
