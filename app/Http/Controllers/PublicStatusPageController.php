@@ -155,7 +155,7 @@ class PublicStatusPageController extends Controller
 
             if ($oldestCarbon->lte($now->copy()->subDays(60))) {
                 $stats[$monitorId] = $this->buildDailyTicks($monitorId);
-            } elseif ($oldestCarbon->lte($now->copy()->subHours(60))) {
+            } elseif ($oldestCarbon->lte($now->copy()->subMinutes(60))) {
                 $stats[$monitorId] = $this->buildHourlyTicks($monitorId);
             } else {
                 $stats[$monitorId] = $this->buildMinuteTicks($monitorId);
@@ -172,7 +172,7 @@ class PublicStatusPageController extends Controller
      */
     private function buildDailyTicks(int $monitorId): array
     {
-        $start = now()->subDays(59)->startOfDay();
+        $start = now()->subDays(60)->startOfDay();
 
         return $this->buildBucketedTicks(
             monitorId: $monitorId,
@@ -190,7 +190,7 @@ class PublicStatusPageController extends Controller
      */
     private function buildHourlyTicks(int $monitorId): array
     {
-        $start = now()->subHours(59)->startOfHour();
+        $start = now()->subHours(60)->startOfHour();
 
         return $this->buildBucketedTicks(
             monitorId: $monitorId,
@@ -208,7 +208,7 @@ class PublicStatusPageController extends Controller
      */
     private function buildMinuteTicks(int $monitorId): array
     {
-        $start = now()->subMinutes(59)->startOfMinute();
+        $start = now()->subMinutes(60)->startOfMinute();
 
         return $this->buildBucketedTicks(
             monitorId: $monitorId,
