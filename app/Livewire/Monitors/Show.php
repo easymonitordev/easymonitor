@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Livewire\Monitors;
 
+use App\Models\Incident;
 use App\Models\Monitor;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Collection;
@@ -224,9 +225,8 @@ class Show extends Component
             ->where('created_at', '>=', $periodStart);
 
         $totalChecks = $statsQuery->count();
-        $successfulChecks = (clone $statsQuery)->where('is_up', true)->count();
         $uptimePercentage = $totalChecks > 0
-            ? round(($successfulChecks / $totalChecks) * 100, 2)
+            ? $this->calculateUptimePercentage($periodStart)
             : null;
 
         $rawAvg = (clone $statsQuery)->where('is_up', true)->avg('response_time_ms');
@@ -263,6 +263,34 @@ class Show extends Component
             'nodeStats' => $nodeStats,
             'activeProbeCount' => \App\Models\ProbeNode::activeCount(),
         ]);
+    }
+
+    /**
+     * Uptime % based on real downtime duration (quorum-decided down incidents),
+     * not raw probe success rate, so single-probe blips don't affect uptime.
+     */
+    private function calculateUptimePercentage(\Illuminate\Support\Carbon $periodStart): float
+    {
+        $periodSeconds = max(1, now()->getTimestamp() - $periodStart->getTimestamp());
+
+        $downSeconds = Incident::query()
+            ->where('monitor_id', $this->monitor->id)
+            ->where('severity', Incident::SEVERITY_DOWN)
+            ->where(function ($q) use ($periodStart) {
+                $q->whereNull('ended_at')
+                  ->orWhere('ended_at', '>=', $periodStart);
+            })
+            ->get(['started_at', 'ended_at'])
+            ->sum(function ($incident) use ($periodStart) {
+                $start = $incident->started_at->greaterThan($periodStart) ? $incident->started_at : $periodStart;
+                $end = $incident->ended_at ?? now();
+
+                return max(0, $end->getTimestamp() - $start->getTimestamp());
+            });
+
+        $uptime = 100 - (($downSeconds / $periodSeconds) * 100);
+
+        return round(max(0, min(100, $uptime)), 2);
     }
 
     /**

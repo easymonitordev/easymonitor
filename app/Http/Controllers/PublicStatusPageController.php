@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Models\Incident;
 use App\Models\StatusPage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -218,7 +219,7 @@ class PublicStatusPageController extends Controller
         }
 
         return [
-            'uptime' => $totalChecks > 0 ? round(($upChecks / $totalChecks) * 100, 2) : null,
+            'uptime' => $totalChecks > 0 ? $this->uptimeFromIncidents($monitorId, $start) : null,
             'mode' => 'daily',
             'from_label' => __('60 days ago'),
             'ticks' => $ticks,
@@ -269,12 +270,42 @@ class PublicStatusPageController extends Controller
             }
         }
 
+        $periodStart = $oldestTimestamp ? Carbon::parse($oldestTimestamp) : null;
+
         return [
-            'uptime' => $totalChecks > 0 ? round(($upChecks / $totalChecks) * 100, 2) : null,
+            'uptime' => $totalChecks > 0 && $periodStart
+                ? $this->uptimeFromIncidents($monitorId, $periodStart)
+                : null,
             'mode' => 'recent',
             'from_label' => $fromLabel,
             'ticks' => $ticks,
         ];
+    }
+
+    /**
+     * Uptime % based on real down-severity incident duration within the period,
+     * so single-probe blips that never reached quorum don't drag the number down.
+     */
+    private function uptimeFromIncidents(int $monitorId, Carbon $periodStart): float
+    {
+        $periodSeconds = max(1, now()->getTimestamp() - $periodStart->getTimestamp());
+
+        $downSeconds = Incident::query()
+            ->where('monitor_id', $monitorId)
+            ->where('severity', Incident::SEVERITY_DOWN)
+            ->where(function ($q) use ($periodStart) {
+                $q->whereNull('ended_at')
+                  ->orWhere('ended_at', '>=', $periodStart);
+            })
+            ->get(['started_at', 'ended_at'])
+            ->sum(function ($incident) use ($periodStart) {
+                $start = $incident->started_at->greaterThan($periodStart) ? $incident->started_at : $periodStart;
+                $end = $incident->ended_at ?? now();
+
+                return max(0, $end->getTimestamp() - $start->getTimestamp());
+            });
+
+        return round(max(0, min(100, 100 - (($downSeconds / $periodSeconds) * 100))), 2);
     }
 
     /**
