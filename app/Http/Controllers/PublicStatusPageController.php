@@ -284,12 +284,52 @@ class PublicStatusPageController extends Controller
             $ticks[] = ['status' => $status, 'tooltip' => $tooltip, 'up_pct' => $upPct];
         }
 
+        $ticks = $this->smoothEmptyTicks($ticks);
+
         return [
             'uptime' => $hasAnyChecks ? $this->uptimeFromIncidents($monitorId, $periodStart) : null,
             'mode' => $mode,
             'from_label' => $fromLabel,
             'ticks' => $ticks,
         ];
+    }
+
+    /**
+     * Empty ticks between two healthy ticks are just probe-timing drift across
+     * bucket boundaries, not real gaps; fill them so the timeline stays solid.
+     * Gaps adjacent to real failures are preserved.
+     *
+     * @param  array<int, array{status: string, tooltip: string, up_pct: float}>  $ticks
+     * @return array<int, array{status: string, tooltip: string, up_pct: float}>
+     */
+    private function smoothEmptyTicks(array $ticks): array
+    {
+        $count = count($ticks);
+        $isHealthy = fn (?array $t) => $t !== null && $t['status'] === 'up';
+        $isFailing = fn (?array $t) => $t !== null && in_array($t['status'], ['down', 'partial'], true);
+
+        for ($i = 0; $i < $count; $i++) {
+            if ($ticks[$i]['status'] !== 'none') {
+                continue;
+            }
+
+            $prev = $ticks[$i - 1] ?? null;
+            $next = $ticks[$i + 1] ?? null;
+
+            if ($isFailing($prev) || $isFailing($next)) {
+                continue;
+            }
+
+            if ($isHealthy($prev) || $isHealthy($next)) {
+                $ticks[$i] = [
+                    'status' => 'up',
+                    'tooltip' => $ticks[$i]['tooltip'],
+                    'up_pct' => 100.0,
+                ];
+            }
+        }
+
+        return $ticks;
     }
 
     /**
