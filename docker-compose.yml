@@ -52,7 +52,10 @@ services:
             POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
             POSTGRES_DB: ${DB_DATABASE:-easymonitor}
         volumes:
-            - db_data:/var/lib/postgresql/data
+            # timescale/timescaledb:*-pg18 sets PGDATA=/var/lib/postgresql/18/docker
+            # (the image also declares /var/lib/postgresql as a VOLUME, which would
+            # otherwise swallow the data into an anonymous volume on every restart).
+            - db_data:/var/lib/postgresql/18/docker
             - ./docker/db/init.sh:/docker-entrypoint-initdb.d/999-init.sh:ro
         networks: [app]
 
