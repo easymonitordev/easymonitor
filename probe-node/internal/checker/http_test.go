@@ -55,7 +55,26 @@ func TestHTTPChecker_Check_Timeout(t *testing.T) {
 
 	assert.False(t, result.OK)
 	assert.NotEmpty(t, result.Error)
-	assert.Contains(t, result.Error, "deadline exceeded")
+	assert.Contains(t, result.Error, "timed out")
+}
+
+func TestHumanizeHTTPError_DNSNotFound(t *testing.T) {
+	checker := NewHTTPChecker()
+	result := checker.Check(10, "test-node", "https://this-host-does-not-exist-easymonitor.invalid", 5*time.Second)
+
+	assert.False(t, result.OK)
+	assert.Contains(t, result.Error, "DNS lookup failed")
+}
+
+func TestHumanizeHTTPError_ConnectionRefused(t *testing.T) {
+	// 127.0.0.1 on a port nothing is listening on.
+	checker := NewHTTPChecker()
+	result := checker.Check(11, "test-node", "http://127.0.0.1:1", 2*time.Second)
+
+	assert.False(t, result.OK)
+	// Could be "Connection refused" on Linux, other messages on other OSes — be lenient.
+	assert.NotContains(t, result.Error, "context deadline")
+	assert.NotEmpty(t, result.Error)
 }
 
 func TestHTTPChecker_Check_InvalidURL(t *testing.T) {
