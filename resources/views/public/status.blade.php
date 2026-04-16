@@ -170,18 +170,23 @@
                                 </div>
 
                                 <!-- 60-tick uptime timeline -->
-                                <div class="flex items-center gap-[5px] h-7" role="img" aria-label="{{ __('Uptime history') }}">
+                                <div class="flex items-end gap-[5px] h-7" role="img" aria-label="{{ __('Uptime history') }}">
                                     @foreach ($stats['ticks'] as $tick)
                                         @php
-                                            $color = match ($tick['status']) {
-                                                'up' => 'bg-success',
-                                                'down' => 'bg-error',
-                                                'partial' => 'bg-warning',
-                                                default => 'bg-base-content/10',
-                                            };
+                                            $upPct = $tick['up_pct'] ?? 0;
+                                            $downPct = $tick['status'] === 'none' ? 0 : 100 - $upPct;
                                         @endphp
-                                        <div class="tooltip flex-1 h-full" data-tip="{{ $tick['tooltip'] }}">
-                                            <div class="w-full h-full rounded-[2px] {{ $color }} hover:opacity-70 transition-opacity" style="max-width: 6px; margin: 0 auto;"></div>
+                                        <div class="tooltip flex-1 min-w-0 h-full flex flex-col justify-end" data-tip="{{ $tick['tooltip'] }}">
+                                            @if ($tick['status'] === 'none')
+                                                <div class="w-full bg-base-content/10 rounded-[2px]" style="height: 35%;"></div>
+                                            @else
+                                                @if ($downPct > 0)
+                                                    <div class="w-full bg-error hover:opacity-70 transition-opacity" style="height: {{ $downPct }}%;"></div>
+                                                @endif
+                                                @if ($upPct > 0)
+                                                    <div class="w-full bg-success hover:opacity-70 transition-opacity {{ $downPct == 0 ? 'rounded-[2px]' : '' }}" style="height: {{ $upPct }}%;"></div>
+                                                @endif
+                                            @endif
                                         </div>
                                     @endforeach
                                 </div>

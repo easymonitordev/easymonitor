@@ -134,7 +134,7 @@ class PublicStatusPageController extends Controller
             ->groupBy('monitor_id')
             ->pluck('oldest', 'monitor_id');
 
-        $sixtyDaysAgo = now()->subDays(60);
+        $now = now();
         $stats = [];
 
         foreach ($monitorIds as $monitorId) {
@@ -145,7 +145,7 @@ class PublicStatusPageController extends Controller
                     'uptime' => null,
                     'mode' => 'empty',
                     'from_label' => null,
-                    'ticks' => array_fill(0, 60, ['status' => 'none', 'tooltip' => __('No data')]),
+                    'ticks' => array_fill(0, 60, ['status' => 'none', 'tooltip' => __('No data'), 'up_pct' => 0]),
                 ];
 
                 continue;
@@ -153,10 +153,12 @@ class PublicStatusPageController extends Controller
 
             $oldestCarbon = Carbon::parse($oldest);
 
-            if ($oldestCarbon->lt($sixtyDaysAgo)) {
+            if ($oldestCarbon->lte($now->copy()->subDays(60))) {
                 $stats[$monitorId] = $this->buildDailyTicks($monitorId);
+            } elseif ($oldestCarbon->lte($now->copy()->subHours(60))) {
+                $stats[$monitorId] = $this->buildHourlyTicks($monitorId);
             } else {
-                $stats[$monitorId] = $this->buildRecentTicks($monitorId);
+                $stats[$monitorId] = $this->buildMinuteTicks($monitorId);
             }
         }
 
@@ -170,113 +172,121 @@ class PublicStatusPageController extends Controller
      */
     private function buildDailyTicks(int $monitorId): array
     {
-        $start = now()->subDays(60)->startOfDay();
+        $start = now()->subDays(59)->startOfDay();
 
-        $rows = DB::table('check_results')
-            ->where('monitor_id', $monitorId)
-            ->where('created_at', '>=', $start)
-            ->select(
-                DB::raw('DATE(created_at) as day'),
-                DB::raw('COUNT(*) as total'),
-                DB::raw('SUM(CASE WHEN is_up THEN 1 ELSE 0 END) as up_count')
-            )
-            ->groupBy('day')
-            ->get()
-            ->keyBy('day');
-
-        $ticks = [];
-        $totalChecks = 0;
-        $upChecks = 0;
-
-        for ($i = 59; $i >= 0; $i--) {
-            $date = now()->subDays($i);
-            $key = $date->format('Y-m-d');
-            $row = $rows->get($key);
-
-            if ($row) {
-                $total = (int) $row->total;
-                $up = (int) $row->up_count;
-                $totalChecks += $total;
-                $upChecks += $up;
-
-                if ($up === $total) {
-                    $status = 'up';
-                    $tooltip = $date->format('M j').' — '.__('No incidents');
-                } elseif ($up === 0) {
-                    $status = 'down';
-                    $tooltip = $date->format('M j').' — '.__('All checks failed').' ('.$total.')';
-                } else {
-                    $status = 'partial';
-                    $pct = round(($up / $total) * 100);
-                    $tooltip = $date->format('M j').' — '.$pct.'% '.__('uptime').' ('.($total - $up).' '.__('failed').')';
-                }
-            } else {
-                $status = 'none';
-                $tooltip = $date->format('M j').' — '.__('No data');
-            }
-
-            $ticks[] = ['status' => $status, 'tooltip' => $tooltip];
-        }
-
-        return [
-            'uptime' => $totalChecks > 0 ? $this->uptimeFromIncidents($monitorId, $start) : null,
-            'mode' => 'daily',
-            'from_label' => __('60 days ago'),
-            'ticks' => $ticks,
-        ];
+        return $this->buildBucketedTicks(
+            monitorId: $monitorId,
+            periodStart: $start,
+            bucketSeconds: 86400,
+            bucketCount: 60,
+            tooltipFormat: 'M j',
+            fromLabel: $start->diffForHumans(),
+            mode: 'daily',
+        );
     }
 
     /**
-     * Build 60 ticks from the most recent check results (one tick per check).
-     * Used when the monitor has less than 60 days of history.
-     *
      * @return array{uptime: float|null, mode: string, ticks: array}
      */
-    private function buildRecentTicks(int $monitorId): array
+    private function buildHourlyTicks(int $monitorId): array
     {
-        $results = DB::table('check_results')
+        $start = now()->subHours(59)->startOfHour();
+
+        return $this->buildBucketedTicks(
+            monitorId: $monitorId,
+            periodStart: $start,
+            bucketSeconds: 3600,
+            bucketCount: 60,
+            tooltipFormat: 'M j H:i',
+            fromLabel: $start->diffForHumans(),
+            mode: 'hourly',
+        );
+    }
+
+    /**
+     * @return array{uptime: float|null, mode: string, ticks: array}
+     */
+    private function buildMinuteTicks(int $monitorId): array
+    {
+        $start = now()->subMinutes(59)->startOfMinute();
+
+        return $this->buildBucketedTicks(
+            monitorId: $monitorId,
+            periodStart: $start,
+            bucketSeconds: 60,
+            bucketCount: 60,
+            tooltipFormat: 'H:i',
+            fromLabel: $start->diffForHumans(),
+            mode: 'minute',
+        );
+    }
+
+    /**
+     * Bucket check_results into a fixed-count timeline. Each tick carries a
+     * status (up/partial/down/none) plus the up percentage so the view can
+     * render a stacked red/green bar when a bucket is partially degraded.
+     *
+     * @return array{uptime: float|null, mode: string, from_label: string|null, ticks: array}
+     */
+    private function buildBucketedTicks(
+        int $monitorId,
+        Carbon $periodStart,
+        int $bucketSeconds,
+        int $bucketCount,
+        string $tooltipFormat,
+        ?string $fromLabel,
+        string $mode,
+    ): array {
+        $rows = DB::table('check_results')
             ->where('monitor_id', $monitorId)
-            ->orderBy('created_at', 'desc')
-            ->limit(60)
-            ->get(['is_up', 'response_time_ms', 'created_at', 'error_message'])
-            ->reverse() // chronological order, oldest -> newest
-            ->values();
-
-        $totalChecks = $results->count();
-        $upChecks = $results->where('is_up', true)->count();
-
-        // Use the oldest record's timestamp as the "from" label (relative).
-        $oldestTimestamp = $results->first()?->created_at;
-        $fromLabel = $oldestTimestamp
-            ? Carbon::parse($oldestTimestamp)->diffForHumans()
-            : null;
+            ->where('created_at', '>=', $periodStart)
+            ->selectRaw('
+                FLOOR(EXTRACT(EPOCH FROM (created_at - ?)) / ?)::int AS bucket_idx,
+                COUNT(*) AS total,
+                SUM(CASE WHEN is_up THEN 1 ELSE 0 END) AS up_count,
+                SUM(CASE WHEN NOT is_up THEN 1 ELSE 0 END) AS down_count
+            ', [$periodStart, $bucketSeconds])
+            ->groupBy('bucket_idx')
+            ->get()
+            ->keyBy('bucket_idx');
 
         $ticks = [];
+        $hasAnyChecks = false;
 
-        // Pad the start with "no data" placeholders if fewer than 60 results.
-        $padding = 60 - $totalChecks;
-        for ($i = 0; $i < $padding; $i++) {
-            $ticks[] = ['status' => 'none', 'tooltip' => __('No data')];
-        }
+        for ($i = 0; $i < $bucketCount; $i++) {
+            $bucketStart = $periodStart->copy()->addSeconds($i * $bucketSeconds);
+            $label = $bucketStart->format($tooltipFormat);
+            $row = $rows->get($i);
 
-        foreach ($results as $result) {
-            $when = Carbon::parse($result->created_at)->format('M j H:i');
-            if ($result->is_up) {
-                $rt = $result->response_time_ms ? ' — '.$result->response_time_ms.'ms' : '';
-                $ticks[] = ['status' => 'up', 'tooltip' => $when.$rt];
-            } else {
-                $err = $result->error_message ? ' — '.\Illuminate\Support\Str::limit($result->error_message, 60) : ' — '.__('Failed');
-                $ticks[] = ['status' => 'down', 'tooltip' => $when.$err];
+            if (! $row) {
+                $ticks[] = ['status' => 'none', 'tooltip' => $label.': '.__('No data'), 'up_pct' => 0];
+
+                continue;
             }
-        }
 
-        $periodStart = $oldestTimestamp ? Carbon::parse($oldestTimestamp) : null;
+            $hasAnyChecks = true;
+            $total = (int) $row->total;
+            $up = (int) $row->up_count;
+            $down = (int) $row->down_count;
+            $upPct = $total > 0 ? round(($up / $total) * 100, 1) : 0;
+
+            if ($down === 0) {
+                $status = 'up';
+                $tooltip = $label.': '.trans_choice(':count check ok|:count checks ok', $total, ['count' => $total]);
+            } elseif ($up === 0) {
+                $status = 'down';
+                $tooltip = $label.': '.trans_choice(':count check failed|:count checks failed', $total, ['count' => $total]);
+            } else {
+                $status = 'partial';
+                $tooltip = $label.': '.$down.'/'.$total.' '.__('failed');
+            }
+
+            $ticks[] = ['status' => $status, 'tooltip' => $tooltip, 'up_pct' => $upPct];
+        }
 
         return [
-            'uptime' => $totalChecks > 0 && $periodStart
-                ? $this->uptimeFromIncidents($monitorId, $periodStart)
-                : null,
-            'mode' => 'recent',
+            'uptime' => $hasAnyChecks ? $this->uptimeFromIncidents($monitorId, $periodStart) : null,
+            'mode' => $mode,
             'from_label' => $fromLabel,
             'ticks' => $ticks,
         ];
