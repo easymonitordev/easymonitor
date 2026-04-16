@@ -160,7 +160,8 @@ class StatusPage extends Model
             return null;
         }
 
-        $disk = config('filesystems.default') === 'local' ? 'public' : config('filesystems.default');
+        $default = config('filesystems.default');
+        $disk = $default === 'local' ? 'public' : $default;
 
         try {
             return \Illuminate\Support\Facades\Storage::disk($disk)->url($this->logo_path);

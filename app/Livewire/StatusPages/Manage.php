@@ -137,6 +137,17 @@ class Manage extends Component
     }
 
     /**
+     * Resolve the disk for public-facing uploads. Falls back to the 'public'
+     * disk when FILESYSTEM_DISK=local since 'local' has no public URL.
+     */
+    private function uploadsDisk(): string
+    {
+        $default = config('filesystems.default');
+
+        return $default === 'local' ? 'public' : $default;
+    }
+
+    /**
      * Save branding (theme, custom CSS, logo)
      */
     public function saveBranding(): void
@@ -152,16 +163,20 @@ class Manage extends Component
         ]);
 
         $logoPath = $this->statusPage->logo_path;
-        // Resolve the disk to use for uploads: configured default (R2 / S3 /
-        // local). Falls back to the 'public' disk for local-only installs.
-        $disk = config('filesystems.default') === 'local' ? 'public' : config('filesystems.default');
+        $disk = $this->uploadsDisk();
 
         if ($this->logo) {
-            // Delete old logo if any
-            if ($logoPath && Storage::disk($disk)->exists($logoPath)) {
+            if ($logoPath) {
                 Storage::disk($disk)->delete($logoPath);
             }
+
             $logoPath = $this->logo->store('status-page-logos', $disk);
+
+            if (! $logoPath) {
+                $this->addError('logo', __('Failed to upload logo. Check your storage configuration.'));
+
+                return;
+            }
         }
 
         $this->statusPage->update([
@@ -182,9 +197,9 @@ class Manage extends Component
     {
         $this->authorize('update', $this->statusPage);
 
-        $disk = config('filesystems.default') === 'local' ? 'public' : config('filesystems.default');
+        $disk = $this->uploadsDisk();
 
-        if ($this->statusPage->logo_path && Storage::disk($disk)->exists($this->statusPage->logo_path)) {
+        if ($this->statusPage->logo_path) {
             Storage::disk($disk)->delete($this->statusPage->logo_path);
         }
 
