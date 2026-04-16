@@ -76,7 +76,8 @@
                 <div class="stat-title">{{ __('Avg Response') }}</div>
                 <div class="stat-value text-2xl">
                     @if ($avgResponseTime !== null)
-                        {{ $avgResponseTime }}<span class="text-lg">ms</span>
+                        @php($rtParts = \App\Support\Format::msParts($avgResponseTime))
+                        {{ $rtParts[0] }}<span class="text-lg">{{ $rtParts[1] }}</span>
                     @else
                         <span class="text-base-content/40">--</span>
                     @endif
@@ -154,7 +155,7 @@
                                     <div class="text-sm text-base-content/60 shrink-0">
                                         @if ($monitor->latestCheckResult?->response_time_ms)
                                             <span class="{{ $monitor->latestCheckResult->response_time_ms > 1000 ? 'text-warning' : '' }}">
-                                                {{ $monitor->latestCheckResult->response_time_ms }}ms
+                                                {{ \App\Support\Format::ms($monitor->latestCheckResult->response_time_ms) }}
                                             </span>
                                         @else
                                             --

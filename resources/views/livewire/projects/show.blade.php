@@ -96,7 +96,7 @@
 
                             <div class="text-sm text-base-content/60 shrink-0">
                                 @if ($monitor->latestCheckResult?->response_time_ms)
-                                    {{ $monitor->latestCheckResult->response_time_ms }}ms
+                                    {{ \App\Support\Format::ms($monitor->latestCheckResult->response_time_ms) }}
                                 @endif
                             </div>
 

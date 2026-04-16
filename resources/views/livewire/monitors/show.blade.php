@@ -301,9 +301,9 @@
                 <h3 class="card-title text-lg">{{ __('Response Time') }}</h3>
                 @if ($avgResponseTime !== null)
                     <div class="flex gap-4 text-sm">
-                        <span class="text-base-content/50">{{ __('Avg') }} <span class="font-semibold text-base-content">{{ $avgResponseTime }}ms</span></span>
-                        <span class="text-base-content/50">{{ __('Min') }} <span class="font-semibold text-success">{{ $minResponseTime }}ms</span></span>
-                        <span class="text-base-content/50">{{ __('Max') }} <span class="font-semibold {{ $maxResponseTime > 1000 ? 'text-warning' : 'text-base-content' }}">{{ $maxResponseTime }}ms</span></span>
+                        <span class="text-base-content/50">{{ __('Avg') }} <span class="font-semibold text-base-content">{{ \App\Support\Format::ms($avgResponseTime) }}</span></span>
+                        <span class="text-base-content/50">{{ __('Min') }} <span class="font-semibold text-success">{{ \App\Support\Format::ms($minResponseTime) }}</span></span>
+                        <span class="text-base-content/50">{{ __('Max') }} <span class="font-semibold {{ $maxResponseTime > 1000 ? 'text-warning' : 'text-base-content' }}">{{ \App\Support\Format::ms($maxResponseTime) }}</span></span>
                     </div>
                 @endif
             </div>
@@ -330,8 +330,10 @@
                         </thead>
                         <tbody>
                             @foreach ($nodeStats as $node)
-                                @php($maxTrend = collect($node['trend'])->filter()->max() ?: 0)
-                                @php($minTrend = collect($node['trend'])->filter()->min() ?: 0)
+                                @php
+                                    $maxTrend = collect($node['trend'])->filter()->max() ?: 0;
+                                    $minTrend = collect($node['trend'])->filter()->min() ?: 0;
+                                @endphp
                                 <tr wire:key="node-{{ $node['node_id'] }}">
                                     <td class="align-middle">
                                         <div class="flex items-center gap-2">
@@ -350,14 +352,19 @@
                                                 <canvas x-ref="canvas" width="320" height="40"></canvas>
                                             </div>
                                             <div class="text-xs text-base-content/50 leading-tight hidden sm:block whitespace-nowrap">
-                                                <div>{{ $maxTrend }}ms</div>
-                                                <div>{{ $minTrend }}ms</div>
+                                                <div>{{ \App\Support\Format::ms($maxTrend) }}</div>
+                                                <div>{{ \App\Support\Format::ms($minTrend) }}</div>
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="text-right align-middle text-sm tabular-nums">{{ $node['min'] }}<span class="text-base-content/50 text-xs">ms</span></td>
-                                    <td class="text-right align-middle text-sm tabular-nums">{{ $node['avg'] }}<span class="text-base-content/50 text-xs">ms</span></td>
-                                    <td class="text-right align-middle text-sm tabular-nums {{ $node['max'] > 1000 ? 'text-warning' : '' }}">{{ $node['max'] }}<span class="text-base-content/50 text-xs">ms</span></td>
+                                    @php
+                                        $minParts = \App\Support\Format::msParts($node['min']);
+                                        $avgParts = \App\Support\Format::msParts($node['avg']);
+                                        $maxParts = \App\Support\Format::msParts($node['max']);
+                                    @endphp
+                                    <td class="text-right align-middle text-sm tabular-nums">{{ $minParts[0] }}<span class="text-base-content/50 text-xs">{{ $minParts[1] }}</span></td>
+                                    <td class="text-right align-middle text-sm tabular-nums">{{ $avgParts[0] }}<span class="text-base-content/50 text-xs">{{ $avgParts[1] }}</span></td>
+                                    <td class="text-right align-middle text-sm tabular-nums {{ $node['max'] > 1000 ? 'text-warning' : '' }}">{{ $maxParts[0] }}<span class="text-base-content/50 text-xs">{{ $maxParts[1] }}</span></td>
                                     <td class="text-right align-middle text-xs text-base-content/70">
                                         {{ $node['total'] }}
                                         @if ($node['failures'] > 0)
@@ -405,7 +412,13 @@
                             displayColors: false,
                             callbacks: {
                                 title: () => '',
-                                label: (ctx) => ctx.parsed.y !== null ? ctx.parsed.y + 'ms' : '',
+                                label: (ctx) => {
+                                    const v = ctx.parsed.y;
+                                    if (v === null) return '';
+                                    if (v < 1000) return v + 'ms';
+                                    const s = (v / 1000).toFixed(1).replace(/\.0$/, '');
+                                    return s + 's';
+                                },
                             },
                         },
                     },
