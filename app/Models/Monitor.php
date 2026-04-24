@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -156,5 +157,13 @@ class Monitor extends Model
     public function ongoingIncident(): HasOne
     {
         return $this->hasOne(Incident::class)->whereNull('ended_at')->latestOfMany('started_at');
+    }
+
+    /**
+     * Notification channels selected for this monitor
+     */
+    public function notificationChannels(): BelongsToMany
+    {
+        return $this->belongsToMany(NotificationChannel::class);
     }
 }

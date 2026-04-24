@@ -10,8 +10,11 @@ use App\Models\Monitor;
 use App\Models\ProbeNode;
 use App\Notifications\MonitorDown;
 use App\Notifications\MonitorRecovered;
+use Illuminate\Notifications\Notification as BaseNotification;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Redis;
 
 /**
@@ -276,27 +279,18 @@ class ResultConsumer
 
     /**
      * Send a notification that a monitor is down
-     */
-    /**
+     *
      * @param  array<int, string>  $affectedNodes
      */
     private function notifyDown(Monitor $monitor, ?string $errorMessage, array $affectedNodes): void
     {
         $this->openIncident($monitor, $errorMessage, $affectedNodes);
 
-        try {
-            $monitor->user->notify(new MonitorDown($monitor, $errorMessage));
-
-            Log::info('Monitor down notification sent', [
-                'monitor_id' => $monitor->id,
-                'user_id' => $monitor->user_id,
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Failed to send monitor down notification', [
-                'monitor_id' => $monitor->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
+        $this->dispatchToChannels(
+            $monitor,
+            new MonitorDown($monitor, $errorMessage),
+            'down',
+        );
     }
 
     /**
@@ -306,19 +300,70 @@ class ResultConsumer
     {
         $this->closeIncident($monitor);
 
-        try {
-            $monitor->user->notify(new MonitorRecovered($monitor));
+        $this->dispatchToChannels(
+            $monitor,
+            new MonitorRecovered($monitor),
+            'recovery',
+        );
+    }
 
-            Log::info('Monitor recovery notification sent', [
+    /**
+     * Resolve the monitor's notification recipients and dispatch the given
+     * notification to each. Falls back to the user's default channel when the
+     * monitor has no explicit channels attached (legacy monitors).
+     */
+    private function dispatchToChannels(Monitor $monitor, BaseNotification $notification, string $event): void
+    {
+        $channels = $this->resolveChannels($monitor);
+
+        if ($channels->isEmpty()) {
+            Log::warning('Monitor notification skipped — no active channels', [
                 'monitor_id' => $monitor->id,
                 'user_id' => $monitor->user_id,
+                'event' => $event,
+            ]);
+
+            return;
+        }
+
+        try {
+            Notification::send($channels, $notification);
+
+            Log::info('Monitor notification sent', [
+                'monitor_id' => $monitor->id,
+                'user_id' => $monitor->user_id,
+                'event' => $event,
+                'channels' => $channels->pluck('type')->all(),
             ]);
         } catch (\Exception $e) {
-            Log::error('Failed to send monitor recovery notification', [
+            Log::error('Failed to send monitor notification', [
                 'monitor_id' => $monitor->id,
+                'event' => $event,
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * @return Collection<int, \App\Models\NotificationChannel>
+     */
+    private function resolveChannels(Monitor $monitor): Collection
+    {
+        $channels = $monitor->notificationChannels()
+            ->where('is_active', true)
+            ->get()
+            ->filter(fn ($channel) => $channel->isConfigured())
+            ->values();
+
+        if ($channels->isNotEmpty()) {
+            return $channels;
+        }
+
+        $default = $monitor->user?->defaultNotificationChannel();
+
+        return $default && $default->isConfigured()
+            ? collect([$default])
+            : collect();
     }
 
     /**

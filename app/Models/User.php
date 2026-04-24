@@ -122,4 +122,35 @@ class User extends Authenticatable
     {
         return $this->hasMany(StatusPage::class);
     }
+
+    /**
+     * Get the user's notification channels
+     */
+    public function notificationChannels(): HasMany
+    {
+        return $this->hasMany(NotificationChannel::class);
+    }
+
+    /**
+     * Get the user's default notification channel
+     */
+    public function defaultNotificationChannel(): ?NotificationChannel
+    {
+        return $this->notificationChannels()
+            ->where('is_active', true)
+            ->where('is_default', true)
+            ->first();
+    }
+
+    protected static function booted(): void
+    {
+        static::created(function (self $user): void {
+            $user->notificationChannels()->create([
+                'type' => \App\Enums\NotificationChannelType::Email,
+                'config' => [],
+                'is_active' => true,
+                'is_default' => true,
+            ]);
+        });
+    }
 }

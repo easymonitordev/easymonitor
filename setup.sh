@@ -370,6 +370,26 @@ case "$MAIL_CHOICE" in
         ;;
 esac
 
+# ── pushover ────────────────────────────────────────────────────────────────
+header "Pushover (push notifications)"
+echo "  Pushover delivers instant push alerts to your phone/desktop. Each user"
+echo "  still supplies their own user key from the Notifications settings page."
+echo "  You only need the application token here (one per EasyMonitor install)."
+echo ""
+echo "  Create an app at: https://pushover.net/apps/build"
+echo ""
+if confirm "Do you already have a Pushover application token?"; then
+    PUSHOVER_TOKEN=$(ask_secret "Pushover application token")
+    if [ -n "$PUSHOVER_TOKEN" ]; then
+        set_env PUSHOVER_APP_TOKEN "$PUSHOVER_TOKEN"
+        ok "Pushover configured. Users can now add their user key at /settings/notifications."
+    else
+        info "Empty token — skipping. You can set PUSHOVER_APP_TOKEN in .env later."
+    fi
+else
+    info "Skipping. Email alerts still work; add PUSHOVER_APP_TOKEN to .env later to enable Pushover."
+fi
+
 # ── object storage (R2 / S3) ────────────────────────────────────────────────
 header "Object storage (status page logos)"
 echo "  1) Local disk (default)"
