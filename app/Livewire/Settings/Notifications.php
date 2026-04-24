@@ -123,7 +123,7 @@ class Notifications extends Component
 
         NotificationFacade::send([$channel], new MonitorRecovered($monitor));
 
-        $this->dispatch('notifications-saved');
+        $this->dispatch('notifications-test-sent', channelId: $channel->id);
     }
 
     public function render()

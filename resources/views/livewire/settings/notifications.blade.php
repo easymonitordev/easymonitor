@@ -46,13 +46,21 @@
                                     @endif
 
                                     @if ($channel->is_active && $channel->isConfigured())
-                                        <button type="button"
-                                                wire:click="sendTest({{ $channel->id }})"
-                                                wire:loading.attr="disabled"
-                                                wire:target="sendTest({{ $channel->id }})"
-                                                class="btn btn-outline btn-sm">
-                                            {{ __('Send test') }}
-                                        </button>
+                                        <div x-data="{ sent: false }"
+                                             x-on:notifications-test-sent.window="if ($event.detail.channelId === {{ $channel->id }}) { sent = true; setTimeout(() => sent = false, 2500); }"
+                                             class="flex items-center gap-2">
+                                            <span x-show="sent" x-transition.opacity class="text-sm text-success" style="display:none">
+                                                {{ __('Test queued') }}
+                                            </span>
+                                            <button type="button"
+                                                    wire:click="sendTest({{ $channel->id }})"
+                                                    wire:loading.attr="disabled"
+                                                    wire:target="sendTest({{ $channel->id }})"
+                                                    class="btn btn-outline btn-sm">
+                                                <span wire:loading.remove wire:target="sendTest({{ $channel->id }})">{{ __('Send test') }}</span>
+                                                <span wire:loading wire:target="sendTest({{ $channel->id }})">{{ __('Sending…') }}</span>
+                                            </button>
+                                        </div>
                                     @endif
                                 </div>
                             </div>
