@@ -29,11 +29,22 @@ class Create extends Component
     public int $failureThreshold = 1;
 
     /**
+     * @var array<int, int>
+     */
+    public array $notificationChannelIds = [];
+
+    /**
      * Mount the component and authorize access
      */
     public function mount(): void
     {
         $this->authorize('create', Monitor::class);
+
+        $default = auth()->user()->defaultNotificationChannel();
+
+        if ($default) {
+            $this->notificationChannelIds = [$default->id];
+        }
     }
 
     /**
@@ -51,6 +62,8 @@ class Create extends Component
             'checkInterval' => ['required', 'integer', 'min:30', 'max:3600'],
             'isActive' => ['boolean'],
             'failureThreshold' => ['required', 'integer', 'min:1', 'max:10'],
+            'notificationChannelIds' => ['array'],
+            'notificationChannelIds.*' => ['integer'],
         ];
     }
 
@@ -81,7 +94,7 @@ class Create extends Component
             $validated['teamId'] = null;
         }
 
-        Monitor::create([
+        $monitor = Monitor::create([
             'user_id' => auth()->id(),
             'team_id' => $validated['teamId'],
             'project_id' => $validated['projectId'],
@@ -91,6 +104,13 @@ class Create extends Component
             'is_active' => $validated['isActive'],
             'failure_threshold' => $validated['failureThreshold'],
         ]);
+
+        $ownedChannelIds = auth()->user()
+            ->notificationChannels()
+            ->whereIn('id', $validated['notificationChannelIds'] ?? [])
+            ->pluck('id');
+
+        $monitor->notificationChannels()->sync($ownedChannelIds);
 
         session()->flash('message', __('Monitor created successfully.'));
 
@@ -115,9 +135,16 @@ class Create extends Component
             ->orderBy('name')
             ->get();
 
+        $channels = $user->notificationChannels()
+            ->where('is_active', true)
+            ->get()
+            ->sortBy(fn (\App\Models\NotificationChannel $channel) => $channel->type->sortOrder())
+            ->values();
+
         return view('livewire.monitors.create', [
             'teams' => $teams,
             'projects' => $projects,
+            'channels' => $channels,
         ]);
     }
 }

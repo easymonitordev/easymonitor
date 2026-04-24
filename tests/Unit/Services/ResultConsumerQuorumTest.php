@@ -56,7 +56,7 @@ test('single probe: one down result marks monitor down immediately', function ()
     $consumer->processResult(resultFields($monitor->id, 'only-probe', 'r1', false, 'Connection refused'));
 
     expect($monitor->fresh()->status)->toBe('down');
-    Notification::assertSentTo($monitor->user, MonitorDown::class);
+    Notification::assertSentTo($monitor->user->defaultNotificationChannel(), MonitorDown::class);
 });
 
 test('two probes: one down + one up = no decision until both in', function () {

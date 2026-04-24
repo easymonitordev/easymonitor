@@ -109,6 +109,37 @@
             </div>
         </div>
 
+        <!-- Notifications -->
+        <div class="card bg-base-100 border border-base-300 mb-4">
+            <div class="card-body gap-4">
+                <div>
+                    <h3 class="text-sm font-semibold uppercase tracking-wider text-base-content/50">{{ __('Notifications') }}</h3>
+                    <p class="text-xs text-base-content/60 mt-1">
+                        {{ __('Choose which channels to alert on down/recovery.') }}
+                        <a href="{{ route('settings.notifications') }}" wire:navigate class="link link-primary">{{ __('Manage channels') }}</a>
+                    </p>
+                </div>
+
+                @forelse ($channels as $channel)
+                    <label wire:key="channel-opt-{{ $channel->id }}" class="label cursor-pointer justify-start gap-3 py-1">
+                        <input type="checkbox"
+                               value="{{ $channel->id }}"
+                               wire:model="notificationChannelIds"
+                               class="checkbox checkbox-primary checkbox-sm" />
+                        <span class="label-text">{{ $channel->type->label() }}</span>
+                        @if ($channel->is_default)
+                            <span class="badge badge-ghost badge-sm">{{ __('Default') }}</span>
+                        @endif
+                        @if (! $channel->isConfigured())
+                            <span class="badge badge-warning badge-sm">{{ __('Not configured') }}</span>
+                        @endif
+                    </label>
+                @empty
+                    <p class="text-xs text-base-content/60">{{ __('No active channels. Configure one in your notification settings.') }}</p>
+                @endforelse
+            </div>
+        </div>
+
         <!-- Organization -->
         <div class="card bg-base-100 border border-base-300 mb-4">
             <div class="card-body gap-5">

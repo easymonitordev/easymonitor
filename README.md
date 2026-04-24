@@ -14,7 +14,7 @@ EasyMonitor is a full-stack monitoring platform for your websites and APIs. Add 
 - **HTTP and ICMP checks** — every 30 seconds to 1 hour per monitor
 - **Multi-region probes** — lightweight Go binaries (~10 MB) you can deploy anywhere
 - **Consecutive-failure threshold** — configurable per monitor; no alerts on flaky single failures
-- **Email alerts** — when a monitor goes down and when it recovers
+- **Multi-channel alerts** — email and Pushover (per-user, per-monitor selection) on down and recovery
 - **Projects** — group related monitors (e.g. main site + APIs)
 - **Teams** — share monitors and projects with collaborators with role-based access
 - **Status pages** — public, unlisted (secret link), or private
@@ -83,7 +83,8 @@ The installer is interactive and walks through:
 4. **Redis password** — optional
 5. **Registration policy** — open or first-user-only
 6. **Email driver** — log only, Amazon SES, or generic SMTP
-7. **Object storage** — local disk, Cloudflare R2, or Amazon S3
+7. **Pushover** — optional; paste an application token to enable push alerts
+8. **Object storage** — local disk, Cloudflare R2, or Amazon S3
 
 It then:
 
@@ -133,6 +134,19 @@ When using the production Caddyfile (configured automatically by `setup.sh` for 
 
 Caddy then provisions a Let's Encrypt certificate automatically on the first request via on-demand TLS. The app gates which domains are allowed via a `/caddy/ask` endpoint that checks the `domain_verified_at` flag.
 
+## Notifications
+
+Each user chooses where their alerts go from **Settings → Notifications**. Every monitor picks a subset of the user's configured channels; new monitors default to the user's default channel.
+
+Supported channels:
+
+| Channel | Setup | Per-user config |
+|---------|-------|-----------------|
+| Email | Configured by the admin via `MAIL_MAILER` (log, SES, SMTP) | Uses the account email |
+| Pushover | Admin sets `PUSHOVER_APP_TOKEN` once (from [pushover.net/apps/build](https://pushover.net/apps/build)) | User pastes their user key (and optional device) |
+
+Send-test buttons on the Notifications page let each user verify their configuration end-to-end.
+
 ## Configuration
 
 Most settings live in `.env`. Notable ones beyond the standard Laravel set:
@@ -145,6 +159,7 @@ Most settings live in `.env`. Notable ones beyond the standard Laravel set:
 | `PROBE_REDIS_URL` | `redis://redis:6379/0` | Probe Redis connection (use `rediss://` for TLS) |
 | `FILESYSTEM_DISK` | `local` | Switch to `s3` for R2 or S3 |
 | `MAIL_MAILER` | `log` | Use `ses` or `smtp` for real delivery |
+| `PUSHOVER_APP_TOKEN` | _(empty)_ | Application token from pushover.net/apps/build — unlocks the Pushover channel for users |
 
 ## Development
 

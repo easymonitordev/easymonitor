@@ -25,6 +25,13 @@
                 </li>
             @endif
             <li>
+                <a href="{{ route('settings.notifications') }}"
+                   class="@if(request()->routeIs('settings.notifications')) active @endif"
+                   wire:navigate>
+                    {{ __('Notifications') }}
+                </a>
+            </li>
+            <li>
                 <a href="{{ route('settings.appearance') }}"
                    class="@if(request()->routeIs('settings.appearance')) active @endif"
                    wire:navigate>

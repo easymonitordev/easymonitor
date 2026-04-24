@@ -26,6 +26,11 @@ class Edit extends Component
     public int $failureThreshold = 1;
 
     /**
+     * @var array<int, int>
+     */
+    public array $notificationChannelIds = [];
+
+    /**
      * Mount the component and authorize access
      */
     public function mount(Monitor $monitor): void
@@ -39,6 +44,9 @@ class Edit extends Component
         $this->checkInterval = $monitor->check_interval;
         $this->isActive = $monitor->is_active;
         $this->failureThreshold = $monitor->failure_threshold ?? 1;
+        $this->notificationChannelIds = $monitor->notificationChannels()
+            ->pluck('notification_channels.id')
+            ->all();
     }
 
     /**
@@ -55,6 +63,8 @@ class Edit extends Component
             'checkInterval' => ['required', 'integer', 'min:30', 'max:3600'],
             'isActive' => ['boolean'],
             'failureThreshold' => ['required', 'integer', 'min:1', 'max:10'],
+            'notificationChannelIds' => ['array'],
+            'notificationChannelIds.*' => ['integer'],
         ];
     }
 
@@ -85,6 +95,13 @@ class Edit extends Component
             'failure_threshold' => $validated['failureThreshold'],
         ]);
 
+        $ownedChannelIds = auth()->user()
+            ->notificationChannels()
+            ->whereIn('id', $validated['notificationChannelIds'] ?? [])
+            ->pluck('id');
+
+        $this->monitor->notificationChannels()->sync($ownedChannelIds);
+
         session()->flash('message', __('Monitor updated successfully.'));
 
         $this->redirect(route('monitors.show', $this->monitor), navigate: true);
@@ -107,8 +124,15 @@ class Edit extends Component
             ->orderBy('name')
             ->get();
 
+        $channels = $user->notificationChannels()
+            ->where('is_active', true)
+            ->get()
+            ->sortBy(fn (\App\Models\NotificationChannel $channel) => $channel->type->sortOrder())
+            ->values();
+
         return view('livewire.monitors.edit', [
             'projects' => $projects,
+            'channels' => $channels,
         ]);
     }
 }

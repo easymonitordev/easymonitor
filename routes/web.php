@@ -12,6 +12,7 @@ use App\Livewire\Projects\Edit as ProjectsEdit;
 use App\Livewire\Projects\Index as ProjectsIndex;
 use App\Livewire\Projects\Show as ProjectsShow;
 use App\Livewire\Settings\Appearance;
+use App\Livewire\Settings\Notifications as SettingsNotifications;
 use App\Livewire\Settings\Password;
 use App\Livewire\Settings\Profile;
 use App\Livewire\Settings\TwoFactor;
@@ -29,7 +30,6 @@ use Laravel\Fortify\Features;
 
 // Caddy on-demand TLS ask endpoint
 Route::get('/caddy/ask', [PublicStatusPageController::class, 'caddyAsk'])->name('caddy.ask');
-
 
 // Home — if Host matches a verified custom_domain, render the status page;
 // otherwise show the welcome page.
@@ -59,6 +59,7 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('settings/profile', Profile::class)->name('settings.profile');
     Route::get('settings/password', Password::class)->name('settings.password');
+    Route::get('settings/notifications', SettingsNotifications::class)->name('settings.notifications');
     Route::get('settings/appearance', Appearance::class)->name('settings.appearance');
 
     Route::get('settings/two-factor', TwoFactor::class)
