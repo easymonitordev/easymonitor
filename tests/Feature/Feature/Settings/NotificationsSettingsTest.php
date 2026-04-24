@@ -84,7 +84,8 @@ test('sendTest dispatches a recovery notification to the chosen channel', functi
     $channel = $user->defaultNotificationChannel();
 
     Livewire::test(Notifications::class)
-        ->call('sendTest', $channel->id);
+        ->call('sendTest', $channel->id)
+        ->assertDispatched('notifications-test-sent');
 
     Notification::assertSentTo($channel, MonitorRecovered::class);
 });
