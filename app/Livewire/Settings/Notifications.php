@@ -121,7 +121,10 @@ class Notifications extends Component
         $monitor->id = 0;
         $monitor->last_checked_at = now();
 
-        NotificationFacade::send([$channel], new MonitorRecovered($monitor));
+        // sendNow() bypasses the queue — a queued test would try to
+        // re-hydrate this transient Monitor via findOrFail($id) on the worker
+        // and silently fail, leaving the user wondering why nothing arrived.
+        NotificationFacade::sendNow([$channel], new MonitorRecovered($monitor));
 
         $this->dispatch('notifications-test-sent', channelId: $channel->id);
     }

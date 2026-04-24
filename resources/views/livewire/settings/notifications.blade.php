@@ -50,7 +50,7 @@
                                              x-on:notifications-test-sent.window="if ($event.detail.channelId === {{ $channel->id }}) { sent = true; setTimeout(() => sent = false, 2500); }"
                                              class="flex items-center gap-2">
                                             <span x-show="sent" x-transition.opacity class="text-sm text-success" style="display:none">
-                                                {{ __('Test queued') }}
+                                                {{ __('Test sent') }}
                                             </span>
                                             <button type="button"
                                                     x-on:click="sending = true; $wire.sendTest({{ $channel->id }}).finally(() => sending = false)"
