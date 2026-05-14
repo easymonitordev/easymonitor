@@ -196,6 +196,151 @@
                 </div>
             </div>
 
+            <!-- Generic Webhook configuration -->
+            <div class="card bg-base-100 border border-base-300">
+                <div class="card-body gap-5">
+                    <div>
+                        <h3 class="text-sm font-semibold uppercase tracking-wider text-base-content/50">{{ __('Webhook') }}</h3>
+                        <p class="text-xs text-base-content/60 mt-1">
+                            {{ __('POST a JSON payload to any HTTP endpoint when a monitor goes down or recovers. Each webhook is signed with HMAC-SHA256; verify the') }}
+                            <code class="text-xs">X-EasyMonitor-Signature</code>
+                            {{ __('header using the secret shown after saving.') }}
+                        </p>
+                    </div>
+
+                    @foreach ($webhookChannels as $existing)
+                        <form wire:key="webhook-edit-{{ $existing->id }}"
+                              wire:submit="saveWebhookChannel({{ $existing->id }})"
+                              class="border border-base-300 rounded-lg p-4 space-y-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div class="form-control">
+                                    <label class="label pb-1">
+                                        <span class="label-text font-medium text-sm">{{ __('Label') }}</span>
+                                    </label>
+                                    <input type="text"
+                                           wire:model="webhookEdits.{{ $existing->id }}.label"
+                                           maxlength="50"
+                                           class="input input-bordered input-sm rounded-lg @error('webhookEdits.'.$existing->id.'.label') input-error @enderror"
+                                           placeholder="PagerDuty / Zapier / …" />
+                                    @error('webhookEdits.'.$existing->id.'.label')
+                                        <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                    @enderror
+                                </div>
+                                <div class="form-control sm:col-span-2">
+                                    <label class="label pb-1">
+                                        <span class="label-text font-medium text-sm">{{ __('Endpoint URL') }}</span>
+                                    </label>
+                                    <input type="url"
+                                           wire:model="webhookEdits.{{ $existing->id }}.url"
+                                           maxlength="500"
+                                           autocomplete="off"
+                                           class="input input-bordered input-sm rounded-lg font-mono text-xs @error('webhookEdits.'.$existing->id.'.url') input-error @enderror"
+                                           placeholder="https://example.com/hooks/easymonitor" />
+                                    @error('webhookEdits.'.$existing->id.'.url')
+                                        <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                    @enderror
+                                </div>
+                            </div>
+
+                            <div class="form-control" x-data="{ copied: false }">
+                                <label class="label pb-1">
+                                    <span class="label-text font-medium text-sm">{{ __('Signing secret') }}</span>
+                                    <span class="label-text-alt text-base-content/50 text-xs">
+                                        {{ __('Use to verify') }} <code class="text-xs">X-EasyMonitor-Signature: sha256=hex(hmac(secret, body))</code>
+                                    </span>
+                                </label>
+                                <div class="flex items-center gap-2">
+                                    <input type="text"
+                                           readonly
+                                           value="{{ $existing->config['secret'] ?? '' }}"
+                                           class="input input-bordered input-sm rounded-lg font-mono text-xs flex-1" />
+                                    <button type="button"
+                                            x-on:click="navigator.clipboard.writeText('{{ $existing->config['secret'] ?? '' }}'); copied = true; setTimeout(() => copied = false, 1500)"
+                                            class="btn btn-ghost btn-sm">
+                                        <span x-show="! copied">{{ __('Copy') }}</span>
+                                        <span x-show="copied" class="text-success" style="display:none">{{ __('Copied') }}</span>
+                                    </button>
+                                    <button type="button"
+                                            wire:click="regenerateWebhookSecret({{ $existing->id }})"
+                                            wire:confirm="{{ __('Regenerate the signing secret? Receivers using the old secret will reject deliveries until updated.') }}"
+                                            class="btn btn-ghost btn-sm">
+                                        {{ __('Regenerate') }}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between gap-3">
+                                <label class="cursor-pointer flex items-center gap-2">
+                                    <input type="checkbox"
+                                           wire:model="webhookEdits.{{ $existing->id }}.is_active"
+                                           class="toggle toggle-success toggle-sm" />
+                                    <span class="label-text text-sm">{{ __('Active') }}</span>
+                                </label>
+
+                                <div class="flex items-center gap-2">
+                                    <button type="button"
+                                            wire:click="deleteWebhookChannel({{ $existing->id }})"
+                                            wire:confirm="{{ __('Delete this webhook?') }}"
+                                            class="btn btn-ghost btn-sm text-error">
+                                        {{ __('Delete') }}
+                                    </button>
+                                    <button type="submit" class="btn btn-primary btn-sm rounded-lg">{{ __('Save') }}</button>
+                                </div>
+                            </div>
+                        </form>
+                    @endforeach
+
+                    <form wire:submit="addWebhookChannel" class="border border-dashed border-base-300 rounded-lg p-4 space-y-4">
+                        <div class="text-xs font-semibold uppercase tracking-wider text-base-content/50">
+                            {{ $webhookChannels->isEmpty() ? __('Add your first webhook') : __('Add another webhook') }}
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div class="form-control">
+                                <label class="label pb-1">
+                                    <span class="label-text font-medium text-sm">{{ __('Label') }}</span>
+                                </label>
+                                <input type="text"
+                                       wire:model="newWebhookLabel"
+                                       maxlength="50"
+                                       class="input input-bordered input-sm rounded-lg @error('newWebhookLabel') input-error @enderror"
+                                       placeholder="PagerDuty / Zapier / …" />
+                                @error('newWebhookLabel')
+                                    <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                @enderror
+                            </div>
+                            <div class="form-control sm:col-span-2">
+                                <label class="label pb-1">
+                                    <span class="label-text font-medium text-sm">{{ __('Endpoint URL') }}</span>
+                                </label>
+                                <input type="url"
+                                       wire:model="newWebhookUrl"
+                                       maxlength="500"
+                                       autocomplete="off"
+                                       class="input input-bordered input-sm rounded-lg font-mono text-xs @error('newWebhookUrl') input-error @enderror"
+                                       placeholder="https://example.com/hooks/easymonitor" />
+                                @error('newWebhookUrl')
+                                    <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-3">
+                            <label class="cursor-pointer flex items-center gap-2">
+                                <input type="checkbox" wire:model="newWebhookActive" class="toggle toggle-success toggle-sm" />
+                                <span class="label-text text-sm">{{ __('Active') }}</span>
+                            </label>
+
+                            <div class="flex items-center gap-3">
+                                <x-action-message on="notifications-saved">
+                                    {{ __('Saved.') }}
+                                </x-action-message>
+                                <button type="submit" class="btn btn-primary btn-sm rounded-lg">{{ __('Add webhook') }}</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             <!-- Pushover configuration -->
             <form wire:submit="savePushover" class="card bg-base-100 border border-base-300">
                 <div class="card-body gap-5">

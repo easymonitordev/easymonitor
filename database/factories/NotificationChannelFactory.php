@@ -55,6 +55,18 @@ class NotificationChannelFactory extends Factory
         ]);
     }
 
+    public function webhook(?string $url = null, ?string $label = null, ?string $secret = null): static
+    {
+        return $this->state(fn () => [
+            'type' => NotificationChannelType::Webhook,
+            'label' => $label ?? 'PagerDuty',
+            'config' => [
+                'url' => $url ?? 'https://example.com/hooks/easymonitor',
+                'secret' => $secret ?? str_repeat('s', 64),
+            ],
+        ]);
+    }
+
     public function default(): static
     {
         return $this->state(fn () => ['is_default' => true]);
