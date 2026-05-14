@@ -52,6 +52,49 @@ class MonitorRecovered extends Notification implements ShouldQueue
     }
 
     /**
+     * Slack incoming-webhook payload.
+     *
+     * @return array<string, mixed>
+     */
+    public function toSlack(object $notifiable): array
+    {
+        $monitorUrl = url("/monitors/{$this->monitor->id}");
+        $fallback = "🟢 {$this->monitor->name} has recovered — {$this->monitor->url}";
+
+        $blocks = [
+            [
+                'type' => 'section',
+                'text' => [
+                    'type' => 'mrkdwn',
+                    'text' => "🟢 *{$this->monitor->name}* has *recovered*\n<{$this->monitor->url}|{$this->monitor->url}>",
+                ],
+            ],
+        ];
+
+        if ($this->monitor->last_checked_at) {
+            $blocks[] = [
+                'type' => 'context',
+                'elements' => [[
+                    'type' => 'mrkdwn',
+                    'text' => '*Recovered:* '.$this->monitor->last_checked_at->format('M d, Y H:i:s T'),
+                ]],
+            ];
+        }
+
+        $blocks[] = [
+            'type' => 'actions',
+            'elements' => [[
+                'type' => 'button',
+                'text' => ['type' => 'plain_text', 'text' => 'View Monitor'],
+                'url' => $monitorUrl,
+                'style' => 'primary',
+            ]],
+        ];
+
+        return ['text' => $fallback, 'blocks' => $blocks];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function toArray(object $notifiable): array
