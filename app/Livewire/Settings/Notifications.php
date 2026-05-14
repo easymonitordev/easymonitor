@@ -37,6 +37,20 @@ class Notifications extends Component
     public bool $newSlackActive = true;
 
     /**
+     * Editable in-place state for each existing Discord channel,
+     * keyed by NotificationChannel id.
+     *
+     * @var array<int, array{label: string, webhook_url: string, is_active: bool}>
+     */
+    public array $discordEdits = [];
+
+    public string $newDiscordLabel = '';
+
+    public string $newDiscordWebhookUrl = '';
+
+    public bool $newDiscordActive = true;
+
+    /**
      * Editable in-place state for each existing Webhook channel,
      * keyed by NotificationChannel id.
      *
@@ -67,6 +81,7 @@ class Notifications extends Component
         }
 
         $this->refreshSlackEdits();
+        $this->refreshDiscordEdits();
         $this->refreshWebhookEdits();
 
         $this->defaultChannelId = $user->notificationChannels()
@@ -182,6 +197,80 @@ class Notifications extends Component
             ->delete();
 
         unset($this->slackEdits[$channelId]);
+
+        $this->dispatch('notifications-saved');
+    }
+
+    public function addDiscordChannel(): void
+    {
+        $this->validate(
+            [
+                'newDiscordLabel' => ['required', 'string', 'max:50'],
+                'newDiscordWebhookUrl' => $this->discordWebhookRules(),
+                'newDiscordActive' => ['boolean'],
+            ],
+            [
+                'newDiscordWebhookUrl.regex' => __('Paste a Discord webhook URL (https://discord.com/api/webhooks/... or https://discordapp.com/api/webhooks/...).'),
+            ],
+        );
+
+        Auth::user()->notificationChannels()->create([
+            'type' => NotificationChannelType::Discord,
+            'label' => $this->newDiscordLabel,
+            'config' => ['webhook_url' => $this->newDiscordWebhookUrl],
+            'is_active' => $this->newDiscordActive,
+            'is_default' => false,
+        ]);
+
+        $this->newDiscordLabel = '';
+        $this->newDiscordWebhookUrl = '';
+        $this->newDiscordActive = true;
+
+        $this->refreshDiscordEdits();
+
+        $this->dispatch('notifications-saved');
+    }
+
+    public function saveDiscordChannel(int $channelId): void
+    {
+        $prefix = "discordEdits.{$channelId}";
+
+        $this->validate(
+            [
+                "{$prefix}.label" => ['required', 'string', 'max:50'],
+                "{$prefix}.webhook_url" => $this->discordWebhookRules(),
+                "{$prefix}.is_active" => ['boolean'],
+            ],
+            [
+                "{$prefix}.webhook_url.regex" => __('Paste a Discord webhook URL (https://discord.com/api/webhooks/... or https://discordapp.com/api/webhooks/...).'),
+            ],
+        );
+
+        $row = $this->discordEdits[$channelId];
+
+        $channel = Auth::user()
+            ->notificationChannels()
+            ->where('type', NotificationChannelType::Discord->value)
+            ->findOrFail($channelId);
+
+        $channel->update([
+            'label' => $row['label'],
+            'config' => ['webhook_url' => $row['webhook_url']],
+            'is_active' => (bool) ($row['is_active'] ?? true),
+        ]);
+
+        $this->dispatch('notifications-saved');
+    }
+
+    public function deleteDiscordChannel(int $channelId): void
+    {
+        Auth::user()
+            ->notificationChannels()
+            ->where('type', NotificationChannelType::Discord->value)
+            ->whereKey($channelId)
+            ->delete();
+
+        unset($this->discordEdits[$channelId]);
 
         $this->dispatch('notifications-saved');
     }
@@ -325,6 +414,7 @@ class Notifications extends Component
         return view('livewire.settings.notifications', [
             'channels' => $channels,
             'slackChannels' => $channels->where('type', NotificationChannelType::Slack)->values(),
+            'discordChannels' => $channels->where('type', NotificationChannelType::Discord)->values(),
             'webhookChannels' => $channels->where('type', NotificationChannelType::Webhook)->values(),
         ]);
     }
@@ -342,6 +432,36 @@ class Notifications extends Component
         $this->slackEdits = Auth::user()
             ->notificationChannels()
             ->where('type', NotificationChannelType::Slack->value)
+            ->get()
+            ->mapWithKeys(fn (NotificationChannel $channel) => [
+                $channel->id => [
+                    'label' => (string) $channel->label,
+                    'webhook_url' => (string) ($channel->config['webhook_url'] ?? ''),
+                    'is_active' => (bool) $channel->is_active,
+                ],
+            ])
+            ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function discordWebhookRules(): array
+    {
+        return [
+            'required',
+            'string',
+            'url',
+            'max:500',
+            'regex:#^https://(discord\.com|discordapp\.com)/api/webhooks/#',
+        ];
+    }
+
+    protected function refreshDiscordEdits(): void
+    {
+        $this->discordEdits = Auth::user()
+            ->notificationChannels()
+            ->where('type', NotificationChannelType::Discord->value)
             ->get()
             ->mapWithKeys(fn (NotificationChannel $channel) => [
                 $channel->id => [

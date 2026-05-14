@@ -110,6 +110,42 @@ class MonitorDown extends Notification implements ShouldQueue
     }
 
     /**
+     * Discord incoming-webhook payload.
+     *
+     * @return array<string, mixed>
+     */
+    public function toDiscord(object $notifiable): array
+    {
+        $dashboardUrl = url("/monitors/{$this->monitor->id}");
+
+        $fields = [];
+        if ($this->errorMessage) {
+            $fields[] = [
+                'name' => 'Error',
+                'value' => mb_substr($this->errorMessage, 0, 1024),
+                'inline' => false,
+            ];
+        }
+
+        $embed = [
+            'title' => "🔴 {$this->monitor->name} is DOWN",
+            'url' => $dashboardUrl,
+            'description' => $this->monitor->url,
+            'color' => 0xED4245, // Discord red
+            'timestamp' => $this->monitor->last_checked_at?->toIso8601String(),
+        ];
+
+        if ($fields !== []) {
+            $embed['fields'] = $fields;
+        }
+
+        return [
+            'username' => 'EasyMonitor',
+            'embeds' => [$embed],
+        ];
+    }
+
+    /**
      * Generic webhook payload — signed and POSTed by WebhookChannel.
      *
      * @return array<string, mixed>

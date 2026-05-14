@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Enums;
 
+use App\Notifications\Channels\DiscordWebhookChannel;
 use App\Notifications\Channels\SlackWebhookChannel;
 use App\Notifications\Channels\WebhookChannel;
 use NotificationChannels\Pushover\PushoverChannel;
@@ -13,6 +14,7 @@ enum NotificationChannelType: string
     case Email = 'email';
     case Pushover = 'pushover';
     case Slack = 'slack';
+    case Discord = 'discord';
     case Webhook = 'webhook';
 
     /**
@@ -24,6 +26,7 @@ enum NotificationChannelType: string
             self::Email => 'Email',
             self::Pushover => 'Pushover',
             self::Slack => 'Slack',
+            self::Discord => 'Discord',
             self::Webhook => 'Webhook',
         };
     }
@@ -37,6 +40,7 @@ enum NotificationChannelType: string
             self::Email => 'mail',
             self::Pushover => PushoverChannel::class,
             self::Slack => SlackWebhookChannel::class,
+            self::Discord => DiscordWebhookChannel::class,
             self::Webhook => WebhookChannel::class,
         };
     }
@@ -49,8 +53,9 @@ enum NotificationChannelType: string
         return match ($this) {
             self::Email => 0,
             self::Slack => 1,
-            self::Webhook => 2,
-            self::Pushover => 3,
+            self::Discord => 2,
+            self::Webhook => 3,
+            self::Pushover => 4,
         };
     }
 }

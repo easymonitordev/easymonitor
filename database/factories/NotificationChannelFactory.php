@@ -55,6 +55,17 @@ class NotificationChannelFactory extends Factory
         ]);
     }
 
+    public function discord(?string $webhookUrl = null, ?string $label = null): static
+    {
+        return $this->state(fn () => [
+            'type' => NotificationChannelType::Discord,
+            'label' => $label ?? '#alerts',
+            'config' => [
+                'webhook_url' => $webhookUrl ?? 'https://discord.com/api/webhooks/0/aaaaaaaaaaaa',
+            ],
+        ]);
+    }
+
     public function webhook(?string $url = null, ?string $label = null, ?string $secret = null): static
     {
         return $this->state(fn () => [

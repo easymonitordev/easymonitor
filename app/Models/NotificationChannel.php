@@ -94,6 +94,16 @@ class NotificationChannel extends Model
     }
 
     /**
+     * Route Discord notifications to the incoming webhook URL stored in config.
+     */
+    public function routeNotificationForDiscord(): ?string
+    {
+        $webhookUrl = $this->config['webhook_url'] ?? null;
+
+        return is_string($webhookUrl) && $webhookUrl !== '' ? $webhookUrl : null;
+    }
+
+    /**
      * Route generic webhook notifications to the URL stored in config.
      */
     public function routeNotificationForWebhook(): ?string
@@ -122,6 +132,7 @@ class NotificationChannel extends Model
             NotificationChannelType::Email => filled($this->user?->email),
             NotificationChannelType::Pushover => filled($this->config['user_key'] ?? null),
             NotificationChannelType::Slack => filled($this->config['webhook_url'] ?? null),
+            NotificationChannelType::Discord => filled($this->config['webhook_url'] ?? null),
             NotificationChannelType::Webhook => filled($this->config['url'] ?? null) && filled($this->config['secret'] ?? null),
         };
     }

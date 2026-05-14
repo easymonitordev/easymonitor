@@ -193,6 +193,75 @@ test('a slack channel can be deleted', function () {
     expect($user->notificationChannels()->whereKey($existing->id)->exists())->toBeFalse();
 });
 
+test('adding a discord channel creates a new notification channel', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    $url = 'https://discord.com/api/webhooks/123/abc';
+
+    Livewire::test(Notifications::class)
+        ->set('newDiscordLabel', '#alerts')
+        ->set('newDiscordWebhookUrl', $url)
+        ->call('addDiscordChannel')
+        ->assertHasNoErrors();
+
+    $discord = $user->notificationChannels()
+        ->where('type', NotificationChannelType::Discord->value)
+        ->first();
+
+    expect($discord)->not->toBeNull();
+    expect($discord->label)->toBe('#alerts');
+    expect($discord->config['webhook_url'])->toBe($url);
+});
+
+test('discord webhook url must come from discord.com or discordapp.com', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->set('newDiscordLabel', '#alerts')
+        ->set('newDiscordWebhookUrl', 'https://example.com/webhook')
+        ->call('addDiscordChannel')
+        ->assertHasErrors(['newDiscordWebhookUrl']);
+});
+
+test('discord channel requires a label', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->set('newDiscordWebhookUrl', 'https://discord.com/api/webhooks/1/x')
+        ->call('addDiscordChannel')
+        ->assertHasErrors(['newDiscordLabel']);
+});
+
+test('a discord channel can be updated in place', function () {
+    $user = User::factory()->create();
+    $existing = NotificationChannel::factory()->for($user)->discord(label: '#alerts')->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->set("discordEdits.{$existing->id}.label", '#renamed')
+        ->set("discordEdits.{$existing->id}.webhook_url", 'https://discordapp.com/api/webhooks/9/zzz')
+        ->call('saveDiscordChannel', $existing->id)
+        ->assertHasNoErrors();
+
+    $existing->refresh();
+    expect($existing->label)->toBe('#renamed');
+    expect($existing->config['webhook_url'])->toBe('https://discordapp.com/api/webhooks/9/zzz');
+});
+
+test('a discord channel can be deleted', function () {
+    $user = User::factory()->create();
+    $existing = NotificationChannel::factory()->for($user)->discord()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->call('deleteDiscordChannel', $existing->id);
+
+    expect($user->notificationChannels()->whereKey($existing->id)->exists())->toBeFalse();
+});
+
 test('adding a webhook channel generates a signing secret', function () {
     $user = User::factory()->create();
     $this->actingAs($user);
