@@ -2,10 +2,12 @@
 
 namespace App\Livewire\Monitors;
 
+use App\Enums\CheckType;
 use App\Models\Monitor;
 use App\Models\Project;
 use App\Models\Team;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
@@ -19,6 +21,8 @@ class Create extends Component
     public ?int $projectId = null;
 
     public string $name = '';
+
+    public string $checkType = 'http';
 
     public string $url = '';
 
@@ -54,16 +58,33 @@ class Create extends Component
      */
     public function rules(): array
     {
+        $urlRule = $this->checkType === CheckType::Icmp->value
+            ? ['required', 'string', 'max:255', 'regex:/^(?!.*:\/\/)[a-zA-Z0-9](?:[a-zA-Z0-9.\-:]*[a-zA-Z0-9])?$/']
+            : ['required', 'url', 'max:255'];
+
         return [
             'teamId' => ['nullable', 'exists:teams,id'],
             'projectId' => ['nullable', 'exists:projects,id'],
             'name' => ['required', 'string', 'max:255'],
-            'url' => ['required', 'url', 'max:255'],
+            'checkType' => ['required', Rule::in([CheckType::Http->value, CheckType::Icmp->value])],
+            'url' => $urlRule,
             'checkInterval' => ['required', 'integer', 'min:30', 'max:3600'],
             'isActive' => ['boolean'],
             'failureThreshold' => ['required', 'integer', 'min:1', 'max:10'],
             'notificationChannelIds' => ['array'],
             'notificationChannelIds.*' => ['integer'],
+        ];
+    }
+
+    /**
+     * Custom validation messages
+     *
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'url.regex' => __('Enter a valid hostname or IP address (no scheme, no path).'),
         ];
     }
 
@@ -99,6 +120,7 @@ class Create extends Component
             'team_id' => $validated['teamId'],
             'project_id' => $validated['projectId'],
             'name' => $validated['name'],
+            'check_type' => $validated['checkType'],
             'url' => $validated['url'],
             'check_interval' => $validated['checkInterval'],
             'is_active' => $validated['isActive'],

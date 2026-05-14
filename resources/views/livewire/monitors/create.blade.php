@@ -21,6 +21,28 @@
 
                 <div class="form-control">
                     <label class="label pb-1">
+                        <span class="label-text font-medium">{{ __('Check Type') }}</span>
+                    </label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="cursor-pointer border border-base-300 rounded-lg p-3 flex items-start gap-3 hover:border-primary {{ $checkType === 'http' ? 'border-primary bg-primary/5' : '' }}">
+                            <input type="radio" wire:model.live="checkType" value="http" class="radio radio-primary radio-sm mt-0.5" />
+                            <div>
+                                <div class="font-medium text-sm">{{ __('HTTP / HTTPS') }}</div>
+                                <div class="text-xs text-base-content/60 mt-0.5">{{ __('Check a website or API endpoint') }}</div>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer border border-base-300 rounded-lg p-3 flex items-start gap-3 hover:border-primary {{ $checkType === 'icmp' ? 'border-primary bg-primary/5' : '' }}">
+                            <input type="radio" wire:model.live="checkType" value="icmp" class="radio radio-primary radio-sm mt-0.5" />
+                            <div>
+                                <div class="font-medium text-sm">{{ __('Ping (ICMP)') }}</div>
+                                <div class="text-xs text-base-content/60 mt-0.5">{{ __('Check that a host is reachable') }}</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-control">
+                    <label class="label pb-1">
                         <span class="label-text font-medium">{{ __('Display Name') }}</span>
                     </label>
                     <input
@@ -43,15 +65,20 @@
 
                 <div class="form-control">
                     <label class="label pb-1">
-                        <span class="label-text font-medium">{{ __('URL') }}</span>
+                        <span class="label-text font-medium">{{ $checkType === 'icmp' ? __('Host') : __('URL') }}</span>
                     </label>
                     <input
-                        type="url"
+                        type="text"
                         wire:model="url"
                         required
                         class="input input-bordered w-full rounded-lg @error('url') input-error @enderror"
-                        placeholder="https://example.com"
+                        placeholder="{{ $checkType === 'icmp' ? '1.1.1.1' : 'https://example.com' }}"
                     />
+                    <div class="label pb-0">
+                        <span class="label-text-alt text-base-content/50">
+                            {{ $checkType === 'icmp' ? __('Hostname or IP address — no scheme or path.') : __('Full URL including https://') }}
+                        </span>
+                    </div>
                     @error('url')
                         <div class="label pb-0">
                             <span class="label-text-alt text-error">{{ $message }}</span>
