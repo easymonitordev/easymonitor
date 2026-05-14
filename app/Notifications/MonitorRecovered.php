@@ -95,6 +95,25 @@ class MonitorRecovered extends Notification implements ShouldQueue
     }
 
     /**
+     * Discord incoming-webhook payload.
+     *
+     * @return array<string, mixed>
+     */
+    public function toDiscord(object $notifiable): array
+    {
+        return [
+            'username' => 'EasyMonitor',
+            'embeds' => [[
+                'title' => "🟢 {$this->monitor->name} has recovered",
+                'url' => url("/monitors/{$this->monitor->id}"),
+                'description' => $this->monitor->url,
+                'color' => 0x57F287, // Discord green
+                'timestamp' => $this->monitor->last_checked_at?->toIso8601String(),
+            ]],
+        ];
+    }
+
+    /**
      * Generic webhook payload — signed and POSTed by WebhookChannel.
      *
      * @return array<string, mixed>

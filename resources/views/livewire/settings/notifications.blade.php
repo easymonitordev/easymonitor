@@ -38,6 +38,12 @@
                                             @case (\App\Enums\NotificationChannelType::Slack)
                                                 {{ __('Webhook configured') }}
                                                 @break
+                                            @case (\App\Enums\NotificationChannelType::Discord)
+                                                {{ __('Webhook configured') }}
+                                                @break
+                                            @case (\App\Enums\NotificationChannelType::Webhook)
+                                                {{ __('Endpoint configured') }}
+                                                @break
                                         @endswitch
                                     </p>
                                 </div>
@@ -190,6 +196,124 @@
                                     {{ __('Saved.') }}
                                 </x-action-message>
                                 <button type="submit" class="btn btn-primary btn-sm rounded-lg">{{ __('Add Slack channel') }}</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Discord configuration -->
+            <div class="card bg-base-100 border border-base-300">
+                <div class="card-body gap-5">
+                    <div>
+                        <h3 class="text-sm font-semibold uppercase tracking-wider text-base-content/50">{{ __('Discord') }}</h3>
+                        <p class="text-xs text-base-content/60 mt-1">
+                            {{ __('In your Discord server settings, open') }}
+                            <span class="font-mono text-xs">{{ __('Integrations → Webhooks → New Webhook') }}</span>,
+                            {{ __('pick a channel, and copy the URL. Add as many as you need.') }}
+                        </p>
+                    </div>
+
+                    @foreach ($discordChannels as $existing)
+                        <form wire:key="discord-edit-{{ $existing->id }}"
+                              wire:submit="saveDiscordChannel({{ $existing->id }})"
+                              class="border border-base-300 rounded-lg p-4 space-y-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div class="form-control">
+                                    <label class="label pb-1">
+                                        <span class="label-text font-medium text-sm">{{ __('Label') }}</span>
+                                    </label>
+                                    <input type="text"
+                                           wire:model="discordEdits.{{ $existing->id }}.label"
+                                           maxlength="50"
+                                           class="input input-bordered input-sm rounded-lg @error('discordEdits.'.$existing->id.'.label') input-error @enderror"
+                                           placeholder="#alerts" />
+                                    @error('discordEdits.'.$existing->id.'.label')
+                                        <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                    @enderror
+                                </div>
+                                <div class="form-control sm:col-span-2">
+                                    <label class="label pb-1">
+                                        <span class="label-text font-medium text-sm">{{ __('Webhook URL') }}</span>
+                                    </label>
+                                    <input type="url"
+                                           wire:model="discordEdits.{{ $existing->id }}.webhook_url"
+                                           maxlength="500"
+                                           autocomplete="off"
+                                           class="input input-bordered input-sm rounded-lg font-mono text-xs @error('discordEdits.'.$existing->id.'.webhook_url') input-error @enderror"
+                                           placeholder="https://discord.com/api/webhooks/..." />
+                                    @error('discordEdits.'.$existing->id.'.webhook_url')
+                                        <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                    @enderror
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between gap-3">
+                                <label class="cursor-pointer flex items-center gap-2">
+                                    <input type="checkbox"
+                                           wire:model="discordEdits.{{ $existing->id }}.is_active"
+                                           class="toggle toggle-success toggle-sm" />
+                                    <span class="label-text text-sm">{{ __('Active') }}</span>
+                                </label>
+
+                                <div class="flex items-center gap-2">
+                                    <button type="button"
+                                            wire:click="deleteDiscordChannel({{ $existing->id }})"
+                                            wire:confirm="{{ __('Delete this Discord channel?') }}"
+                                            class="btn btn-ghost btn-sm text-error">
+                                        {{ __('Delete') }}
+                                    </button>
+                                    <button type="submit" class="btn btn-primary btn-sm rounded-lg">{{ __('Save') }}</button>
+                                </div>
+                            </div>
+                        </form>
+                    @endforeach
+
+                    <form wire:submit="addDiscordChannel" class="border border-dashed border-base-300 rounded-lg p-4 space-y-4">
+                        <div class="text-xs font-semibold uppercase tracking-wider text-base-content/50">
+                            {{ $discordChannels->isEmpty() ? __('Add your first Discord channel') : __('Add another Discord channel') }}
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div class="form-control">
+                                <label class="label pb-1">
+                                    <span class="label-text font-medium text-sm">{{ __('Label') }}</span>
+                                </label>
+                                <input type="text"
+                                       wire:model="newDiscordLabel"
+                                       maxlength="50"
+                                       class="input input-bordered input-sm rounded-lg @error('newDiscordLabel') input-error @enderror"
+                                       placeholder="#alerts" />
+                                @error('newDiscordLabel')
+                                    <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                @enderror
+                            </div>
+                            <div class="form-control sm:col-span-2">
+                                <label class="label pb-1">
+                                    <span class="label-text font-medium text-sm">{{ __('Webhook URL') }}</span>
+                                </label>
+                                <input type="url"
+                                       wire:model="newDiscordWebhookUrl"
+                                       maxlength="500"
+                                       autocomplete="off"
+                                       class="input input-bordered input-sm rounded-lg font-mono text-xs @error('newDiscordWebhookUrl') input-error @enderror"
+                                       placeholder="https://discord.com/api/webhooks/..." />
+                                @error('newDiscordWebhookUrl')
+                                    <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-3">
+                            <label class="cursor-pointer flex items-center gap-2">
+                                <input type="checkbox" wire:model="newDiscordActive" class="toggle toggle-success toggle-sm" />
+                                <span class="label-text text-sm">{{ __('Active') }}</span>
+                            </label>
+
+                            <div class="flex items-center gap-3">
+                                <x-action-message on="notifications-saved">
+                                    {{ __('Saved.') }}
+                                </x-action-message>
+                                <button type="submit" class="btn btn-primary btn-sm rounded-lg">{{ __('Add Discord channel') }}</button>
                             </div>
                         </div>
                     </form>
