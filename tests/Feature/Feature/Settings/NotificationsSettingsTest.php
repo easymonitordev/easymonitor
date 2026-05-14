@@ -90,6 +90,109 @@ test('sendTest dispatches a recovery notification to the chosen channel', functi
     Notification::assertSentTo($channel, MonitorRecovered::class);
 });
 
+test('adding a slack channel creates a new notification channel', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    $url = 'https://hooks.slack.com/services/T0/B0/abc123';
+
+    Livewire::test(Notifications::class)
+        ->set('newSlackLabel', '#alerts')
+        ->set('newSlackWebhookUrl', $url)
+        ->call('addSlackChannel')
+        ->assertHasNoErrors();
+
+    $slack = $user->notificationChannels()
+        ->where('type', NotificationChannelType::Slack->value)
+        ->first();
+
+    expect($slack)->not->toBeNull();
+    expect($slack->label)->toBe('#alerts');
+    expect($slack->config['webhook_url'])->toBe($url);
+    expect($slack->is_active)->toBeTrue();
+});
+
+test('multiple slack channels can be added per user', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    $component = Livewire::test(Notifications::class)
+        ->set('newSlackLabel', '#alerts-api')
+        ->set('newSlackWebhookUrl', 'https://hooks.slack.com/services/T0/B0/api')
+        ->call('addSlackChannel');
+
+    $component->set('newSlackLabel', '#alerts-frontend')
+        ->set('newSlackWebhookUrl', 'https://hooks.slack.com/services/T0/B0/fe')
+        ->call('addSlackChannel');
+
+    $slacks = $user->notificationChannels()
+        ->where('type', NotificationChannelType::Slack->value)
+        ->orderBy('id')
+        ->get();
+
+    expect($slacks)->toHaveCount(2);
+    expect($slacks->pluck('label')->all())->toBe(['#alerts-api', '#alerts-frontend']);
+});
+
+test('slack channel requires a label', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->set('newSlackWebhookUrl', 'https://hooks.slack.com/services/T0/B0/x')
+        ->call('addSlackChannel')
+        ->assertHasErrors(['newSlackLabel']);
+});
+
+test('slack webhook url must come from hooks.slack.com', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->set('newSlackLabel', '#alerts')
+        ->set('newSlackWebhookUrl', 'https://example.com/webhook')
+        ->call('addSlackChannel')
+        ->assertHasErrors(['newSlackWebhookUrl']);
+});
+
+test('slack webhook url must be a valid url', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->set('newSlackLabel', '#alerts')
+        ->set('newSlackWebhookUrl', 'not-a-url')
+        ->call('addSlackChannel')
+        ->assertHasErrors(['newSlackWebhookUrl']);
+});
+
+test('a slack channel can be updated in place', function () {
+    $user = User::factory()->create();
+    $existing = NotificationChannel::factory()->for($user)->slack(label: '#alerts')->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->set("slackEdits.{$existing->id}.label", '#alerts-renamed')
+        ->set("slackEdits.{$existing->id}.webhook_url", 'https://hooks.slack.com/services/T0/B0/new')
+        ->call('saveSlackChannel', $existing->id)
+        ->assertHasNoErrors();
+
+    $existing->refresh();
+    expect($existing->label)->toBe('#alerts-renamed');
+    expect($existing->config['webhook_url'])->toBe('https://hooks.slack.com/services/T0/B0/new');
+});
+
+test('a slack channel can be deleted', function () {
+    $user = User::factory()->create();
+    $existing = NotificationChannel::factory()->for($user)->slack()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->call('deleteSlackChannel', $existing->id);
+
+    expect($user->notificationChannels()->whereKey($existing->id)->exists())->toBeFalse();
+});
+
 test('a user cannot target another user\'s channel', function () {
     $user = User::factory()->create();
     $other = User::factory()->create();

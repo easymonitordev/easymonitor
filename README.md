@@ -19,7 +19,7 @@ EasyMonitor is a full-stack monitoring platform for your websites and APIs. Add 
 - **HTTP and ICMP checks** — every 30 seconds to 1 hour per monitor
 - **Multi-region probes** — lightweight Go binaries (~10 MB) you can deploy anywhere
 - **Consecutive-failure threshold** — configurable per monitor; no alerts on flaky single failures
-- **Multi-channel alerts** — email and Pushover (per-user, per-monitor selection) on down and recovery
+- **Multi-channel alerts** — email, Slack, and Pushover (per-user, per-monitor selection) on down and recovery
 - **Projects** — group related monitors (e.g. main site + APIs)
 - **Teams** — share monitors and projects with collaborators with role-based access
 - **Status pages** — public, unlisted (secret link), or private
@@ -148,6 +148,7 @@ Supported channels:
 | Channel | Setup | Per-user config |
 |---------|-------|-----------------|
 | Email | Configured by the admin via `MAIL_MAILER` (log, SES, SMTP) | Uses the account email |
+| Slack | No admin setup — Slack-side only | User adds one or more [incoming webhooks](https://api.slack.com/messaging/webhooks), each labelled (e.g. `#alerts-api`, `#alerts-frontend`) — pick which ones to alert per monitor |
 | Pushover | Admin sets `PUSHOVER_APP_TOKEN` once (from [pushover.net/apps/build](https://pushover.net/apps/build)) | User pastes their user key (and optional device) |
 
 Send-test buttons on the Notifications page let each user verify their configuration end-to-end.

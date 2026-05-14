@@ -44,6 +44,17 @@ class NotificationChannelFactory extends Factory
         ]);
     }
 
+    public function slack(?string $webhookUrl = null, ?string $label = null): static
+    {
+        return $this->state(fn () => [
+            'type' => NotificationChannelType::Slack,
+            'label' => $label ?? '#alerts',
+            'config' => [
+                'webhook_url' => $webhookUrl ?? 'https://hooks.slack.com/services/T000/B000/XXXXXXXXXXXXXXXXXXXXXXXX',
+            ],
+        ]);
+    }
+
     public function default(): static
     {
         return $this->state(fn () => ['is_default' => true]);

@@ -153,7 +153,9 @@
                                value="{{ $channel->id }}"
                                wire:model="notificationChannelIds"
                                class="checkbox checkbox-primary checkbox-sm" />
-                        <span class="label-text">{{ $channel->type->label() }}</span>
+                        <span class="label-text">
+                            {{ $channel->type->label() }}@if ($channel->label)<span class="text-base-content/60"> — {{ $channel->label }}</span>@endif
+                        </span>
                         @if ($channel->is_default)
                             <span class="badge badge-ghost badge-sm">{{ __('Default') }}</span>
                         @endif

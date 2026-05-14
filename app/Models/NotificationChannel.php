@@ -23,6 +23,7 @@ class NotificationChannel extends Model
     protected $fillable = [
         'user_id',
         'type',
+        'label',
         'config',
         'is_active',
         'is_default',
@@ -83,6 +84,16 @@ class NotificationChannel extends Model
     }
 
     /**
+     * Route Slack notifications to the incoming webhook URL stored in config.
+     */
+    public function routeNotificationForSlack(): ?string
+    {
+        $webhookUrl = $this->config['webhook_url'] ?? null;
+
+        return is_string($webhookUrl) && $webhookUrl !== '' ? $webhookUrl : null;
+    }
+
+    /**
      * Whether the channel has the configuration it needs to send.
      */
     public function isConfigured(): bool
@@ -90,6 +101,7 @@ class NotificationChannel extends Model
         return match ($this->type) {
             NotificationChannelType::Email => filled($this->user?->email),
             NotificationChannelType::Pushover => filled($this->config['user_key'] ?? null),
+            NotificationChannelType::Slack => filled($this->config['webhook_url'] ?? null),
         };
     }
 }

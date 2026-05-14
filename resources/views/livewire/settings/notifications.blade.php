@@ -13,8 +13,11 @@
                              class="card bg-base-100 border border-base-300">
                             <div class="card-body py-4 flex-row items-center justify-between gap-4">
                                 <div class="flex-1 min-w-0">
-                                    <div class="flex items-center gap-2">
+                                    <div class="flex items-center gap-2 flex-wrap">
                                         <span class="font-medium">{{ $channel->type->label() }}</span>
+                                        @if ($channel->label)
+                                            <span class="text-base-content/60 text-sm">— {{ $channel->label }}</span>
+                                        @endif
                                         @if ($channel->is_default)
                                             <span class="badge badge-primary badge-sm">{{ __('Default') }}</span>
                                         @endif
@@ -31,6 +34,9 @@
                                                 @break
                                             @case (\App\Enums\NotificationChannelType::Pushover)
                                                 {{ __('User key set') }}{{ ($channel->config['device'] ?? null) ? ' · '.$channel->config['device'] : '' }}
+                                                @break
+                                            @case (\App\Enums\NotificationChannelType::Slack)
+                                                {{ __('Webhook configured') }}
                                                 @break
                                         @endswitch
                                     </p>
@@ -70,6 +76,124 @@
                 @error('test')
                     <p class="text-error text-sm mt-2">{{ $message }}</p>
                 @enderror
+            </div>
+
+            <!-- Slack configuration -->
+            <div class="card bg-base-100 border border-base-300">
+                <div class="card-body gap-5">
+                    <div>
+                        <h3 class="text-sm font-semibold uppercase tracking-wider text-base-content/50">{{ __('Slack') }}</h3>
+                        <p class="text-xs text-base-content/60 mt-1">
+                            {{ __('Create an') }}
+                            <a href="https://api.slack.com/messaging/webhooks" target="_blank" rel="noopener" class="link link-primary">{{ __('incoming webhook') }}</a>
+                            {{ __('for each Slack channel you want alerts delivered to. Add as many as you need — when creating a monitor you can pick which ones to alert.') }}
+                        </p>
+                    </div>
+
+                    @foreach ($slackChannels as $existing)
+                        <form wire:key="slack-edit-{{ $existing->id }}"
+                              wire:submit="saveSlackChannel({{ $existing->id }})"
+                              class="border border-base-300 rounded-lg p-4 space-y-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div class="form-control">
+                                    <label class="label pb-1">
+                                        <span class="label-text font-medium text-sm">{{ __('Label') }}</span>
+                                    </label>
+                                    <input type="text"
+                                           wire:model="slackEdits.{{ $existing->id }}.label"
+                                           maxlength="50"
+                                           class="input input-bordered input-sm rounded-lg @error('slackEdits.'.$existing->id.'.label') input-error @enderror"
+                                           placeholder="#alerts-api" />
+                                    @error('slackEdits.'.$existing->id.'.label')
+                                        <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                    @enderror
+                                </div>
+                                <div class="form-control sm:col-span-2">
+                                    <label class="label pb-1">
+                                        <span class="label-text font-medium text-sm">{{ __('Webhook URL') }}</span>
+                                    </label>
+                                    <input type="url"
+                                           wire:model="slackEdits.{{ $existing->id }}.webhook_url"
+                                           maxlength="500"
+                                           autocomplete="off"
+                                           class="input input-bordered input-sm rounded-lg font-mono text-xs @error('slackEdits.'.$existing->id.'.webhook_url') input-error @enderror"
+                                           placeholder="https://hooks.slack.com/services/..." />
+                                    @error('slackEdits.'.$existing->id.'.webhook_url')
+                                        <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                    @enderror
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between gap-3">
+                                <label class="cursor-pointer flex items-center gap-2">
+                                    <input type="checkbox"
+                                           wire:model="slackEdits.{{ $existing->id }}.is_active"
+                                           class="toggle toggle-success toggle-sm" />
+                                    <span class="label-text text-sm">{{ __('Active') }}</span>
+                                </label>
+
+                                <div class="flex items-center gap-2">
+                                    <button type="button"
+                                            wire:click="deleteSlackChannel({{ $existing->id }})"
+                                            wire:confirm="{{ __('Delete this Slack channel?') }}"
+                                            class="btn btn-ghost btn-sm text-error">
+                                        {{ __('Delete') }}
+                                    </button>
+                                    <button type="submit" class="btn btn-primary btn-sm rounded-lg">{{ __('Save') }}</button>
+                                </div>
+                            </div>
+                        </form>
+                    @endforeach
+
+                    <form wire:submit="addSlackChannel" class="border border-dashed border-base-300 rounded-lg p-4 space-y-4">
+                        <div class="text-xs font-semibold uppercase tracking-wider text-base-content/50">
+                            {{ $slackChannels->isEmpty() ? __('Add your first Slack channel') : __('Add another Slack channel') }}
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div class="form-control">
+                                <label class="label pb-1">
+                                    <span class="label-text font-medium text-sm">{{ __('Label') }}</span>
+                                </label>
+                                <input type="text"
+                                       wire:model="newSlackLabel"
+                                       maxlength="50"
+                                       class="input input-bordered input-sm rounded-lg @error('newSlackLabel') input-error @enderror"
+                                       placeholder="#alerts-api" />
+                                @error('newSlackLabel')
+                                    <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                @enderror
+                            </div>
+                            <div class="form-control sm:col-span-2">
+                                <label class="label pb-1">
+                                    <span class="label-text font-medium text-sm">{{ __('Webhook URL') }}</span>
+                                </label>
+                                <input type="url"
+                                       wire:model="newSlackWebhookUrl"
+                                       maxlength="500"
+                                       autocomplete="off"
+                                       class="input input-bordered input-sm rounded-lg font-mono text-xs @error('newSlackWebhookUrl') input-error @enderror"
+                                       placeholder="https://hooks.slack.com/services/..." />
+                                @error('newSlackWebhookUrl')
+                                    <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-3">
+                            <label class="cursor-pointer flex items-center gap-2">
+                                <input type="checkbox" wire:model="newSlackActive" class="toggle toggle-success toggle-sm" />
+                                <span class="label-text text-sm">{{ __('Active') }}</span>
+                            </label>
+
+                            <div class="flex items-center gap-3">
+                                <x-action-message on="notifications-saved">
+                                    {{ __('Saved.') }}
+                                </x-action-message>
+                                <button type="submit" class="btn btn-primary btn-sm rounded-lg">{{ __('Add Slack channel') }}</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
             </div>
 
             <!-- Pushover configuration -->
