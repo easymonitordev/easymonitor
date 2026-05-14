@@ -7,6 +7,11 @@
 
 EasyMonitor is a full-stack monitoring platform for your websites and APIs. Add a URL, pick an interval, and get alerted when something breaks. Group monitors into projects, share live status with your users via public status pages, and run probes in multiple regions to eliminate false positives.
 
+## Screenshot
+
+<!-- Replace public/img/dashboard.png with your own screenshot. -->
+![EasyMonitor dashboard](public/img/dashboard.png)
+
 ---
 
 ## Features

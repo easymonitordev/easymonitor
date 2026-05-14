@@ -25,6 +25,9 @@
                         {{ __('Pending') }}
                     </div>
                 @endif
+                @if ($monitor->check_type === \App\Enums\CheckType::Icmp)
+                    <span class="badge badge-info font-mono">{{ __('ICMP') }}</span>
+                @endif
                 @if ($monitor->project)
                     <a href="{{ route('projects.show', $monitor->project) }}" wire:navigate class="badge badge-ghost gap-1 hover:badge-neutral">
                         @if ($monitor->project->color)

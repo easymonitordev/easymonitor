@@ -21,6 +21,7 @@ class MonitorFactory extends Factory
             'team_id' => null,
             'name' => fake()->domainName(),
             'url' => fake()->url(),
+            'check_type' => \App\Enums\CheckType::Http,
             'is_active' => true,
             'status' => 'pending',
             'check_interval' => 60,
@@ -73,6 +74,17 @@ class MonitorFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'is_active' => false,
+        ]);
+    }
+
+    /**
+     * Indicate that the monitor is an ICMP/ping check
+     */
+    public function icmp(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'check_type' => \App\Enums\CheckType::Icmp,
+            'url' => fake()->domainName(),
         ]);
     }
 }

@@ -228,6 +228,89 @@ test('user can toggle their own monitor status', function () {
     ]);
 });
 
+test('user can create an icmp monitor with a hostname', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user);
+
+    Livewire::test(Create::class)
+        ->set('name', 'Cloudflare DNS')
+        ->set('checkType', 'icmp')
+        ->set('url', '1.1.1.1')
+        ->set('checkInterval', 60)
+        ->call('save')
+        ->assertRedirect(route('monitors.index'));
+
+    $this->assertDatabaseHas('monitors', [
+        'user_id' => $user->id,
+        'name' => 'Cloudflare DNS',
+        'check_type' => 'icmp',
+        'url' => '1.1.1.1',
+    ]);
+});
+
+test('check type defaults to http on create', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Create::class)->assertSet('checkType', 'http');
+});
+
+test('icmp monitor rejects values with a scheme', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Create::class)
+        ->set('name', 'Bad')
+        ->set('checkType', 'icmp')
+        ->set('url', 'https://example.com')
+        ->call('save')
+        ->assertHasErrors('url');
+});
+
+test('icmp monitor rejects values with a path', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Create::class)
+        ->set('name', 'Bad')
+        ->set('checkType', 'icmp')
+        ->set('url', 'example.com/path')
+        ->call('save')
+        ->assertHasErrors('url');
+});
+
+test('http monitor still requires a valid url', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Create::class)
+        ->set('name', 'Bad')
+        ->set('checkType', 'http')
+        ->set('url', 'example.com')
+        ->call('save')
+        ->assertHasErrors('url');
+});
+
+test('user can switch a monitor from http to icmp', function () {
+    $user = User::factory()->create();
+    $monitor = Monitor::factory()->create(['user_id' => $user->id, 'url' => 'https://example.com']);
+
+    $this->actingAs($user);
+
+    Livewire::test(Edit::class, ['monitor' => $monitor])
+        ->set('checkType', 'icmp')
+        ->set('url', '8.8.8.8')
+        ->call('save')
+        ->assertRedirect(route('monitors.show', $monitor));
+
+    $this->assertDatabaseHas('monitors', [
+        'id' => $monitor->id,
+        'check_type' => 'icmp',
+        'url' => '8.8.8.8',
+    ]);
+});
+
 test('monitors index shows personal monitors', function () {
     $user = User::factory()->create();
     $monitor1 = Monitor::factory()->create(['user_id' => $user->id, 'name' => 'Monitor 1']);

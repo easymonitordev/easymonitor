@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CheckType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -25,6 +26,7 @@ class Monitor extends Model
         'project_id',
         'name',
         'url',
+        'check_type',
         'is_active',
         'status',
         'check_interval',
@@ -47,6 +49,7 @@ class Monitor extends Model
             'is_active' => 'boolean',
             'last_checked_at' => 'datetime',
             'next_run_at' => 'datetime',
+            'check_type' => CheckType::class,
         ];
     }
 

@@ -2,9 +2,11 @@
 
 namespace App\Livewire\Monitors;
 
+use App\Enums\CheckType;
 use App\Models\Monitor;
 use App\Models\Project;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 
 class Edit extends Component
@@ -16,6 +18,8 @@ class Edit extends Component
     public ?int $projectId = null;
 
     public string $name = '';
+
+    public string $checkType = 'http';
 
     public string $url = '';
 
@@ -40,6 +44,7 @@ class Edit extends Component
         $this->monitor = $monitor;
         $this->projectId = $monitor->project_id;
         $this->name = $monitor->name;
+        $this->checkType = $monitor->check_type->value;
         $this->url = $monitor->url;
         $this->checkInterval = $monitor->check_interval;
         $this->isActive = $monitor->is_active;
@@ -56,15 +61,32 @@ class Edit extends Component
      */
     public function rules(): array
     {
+        $urlRule = $this->checkType === CheckType::Icmp->value
+            ? ['required', 'string', 'max:255', 'regex:/^(?!.*:\/\/)[a-zA-Z0-9](?:[a-zA-Z0-9.\-:]*[a-zA-Z0-9])?$/']
+            : ['required', 'url', 'max:255'];
+
         return [
             'projectId' => ['nullable', 'exists:projects,id'],
             'name' => ['required', 'string', 'max:255'],
-            'url' => ['required', 'url', 'max:255'],
+            'checkType' => ['required', Rule::in([CheckType::Http->value, CheckType::Icmp->value])],
+            'url' => $urlRule,
             'checkInterval' => ['required', 'integer', 'min:30', 'max:3600'],
             'isActive' => ['boolean'],
             'failureThreshold' => ['required', 'integer', 'min:1', 'max:10'],
             'notificationChannelIds' => ['array'],
             'notificationChannelIds.*' => ['integer'],
+        ];
+    }
+
+    /**
+     * Custom validation messages
+     *
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'url.regex' => __('Enter a valid hostname or IP address (no scheme, no path).'),
         ];
     }
 
@@ -89,6 +111,7 @@ class Edit extends Component
             'project_id' => $validated['projectId'],
             'team_id' => $validated['projectId'] ? null : $this->monitor->team_id,
             'name' => $validated['name'],
+            'check_type' => $validated['checkType'],
             'url' => $validated['url'],
             'check_interval' => $validated['checkInterval'],
             'is_active' => $validated['isActive'],
