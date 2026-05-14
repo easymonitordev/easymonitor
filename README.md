@@ -19,7 +19,7 @@ EasyMonitor is a full-stack monitoring platform for your websites and APIs. Add 
 - **HTTP and ICMP checks** — every 30 seconds to 1 hour per monitor
 - **Multi-region probes** — lightweight Go binaries (~10 MB) you can deploy anywhere
 - **Consecutive-failure threshold** — configurable per monitor; no alerts on flaky single failures
-- **Multi-channel alerts** — email, Slack, and Pushover (per-user, per-monitor selection) on down and recovery
+- **Multi-channel alerts** — email, Slack, generic webhooks (HMAC-signed), and Pushover (per-user, per-monitor selection) on down and recovery
 - **Projects** — group related monitors (e.g. main site + APIs)
 - **Teams** — share monitors and projects with collaborators with role-based access
 - **Status pages** — public, unlisted (secret link), or private
@@ -149,9 +149,89 @@ Supported channels:
 |---------|-------|-----------------|
 | Email | Configured by the admin via `MAIL_MAILER` (log, SES, SMTP) | Uses the account email |
 | Slack | No admin setup — Slack-side only | User adds one or more [incoming webhooks](https://api.slack.com/messaging/webhooks), each labelled (e.g. `#alerts-api`, `#alerts-frontend`) — pick which ones to alert per monitor |
+| Webhook | No admin setup | User adds one or more HTTP endpoints (any URL) — each gets an auto-generated HMAC-SHA256 secret. Payloads are signed with `X-EasyMonitor-Signature: sha256=…` and tagged with `X-EasyMonitor-Event: monitor.down\|monitor.recovered`. Pipe to PagerDuty, Zapier, n8n, custom services |
 | Pushover | Admin sets `PUSHOVER_APP_TOKEN` once (from [pushover.net/apps/build](https://pushover.net/apps/build)) | User pastes their user key (and optional device) |
 
 Send-test buttons on the Notifications page let each user verify their configuration end-to-end.
+
+### Webhook payload
+
+Webhook deliveries are HTTP `POST` with `Content-Type: application/json`. Two events fire — one when a monitor crosses the failure threshold and one when it recovers.
+
+**Headers**
+
+| Header | Value |
+|--------|-------|
+| `X-EasyMonitor-Event` | `monitor.down` or `monitor.recovered` |
+| `X-EasyMonitor-Signature` | `sha256=<hex>` — HMAC-SHA256 of the raw body using your channel's secret |
+| `User-Agent` | `EasyMonitor-Webhook/1.0` |
+
+**`monitor.down` body**
+
+```json
+{
+  "event": "monitor.down",
+  "monitor": {
+    "id": 42,
+    "name": "Production API",
+    "url": "https://api.example.com/health",
+    "check_type": "http"
+  },
+  "error": "Get \"https://api.example.com/health\": dial tcp: connection refused",
+  "checked_at": "2026-05-14T13:42:07+00:00",
+  "dashboard_url": "https://easymonitor.example.com/monitors/42"
+}
+```
+
+`error` is `null` when the failure has no diagnostic message. `check_type` is `http` or `icmp`.
+
+**`monitor.recovered` body**
+
+```json
+{
+  "event": "monitor.recovered",
+  "monitor": {
+    "id": 42,
+    "name": "Production API",
+    "url": "https://api.example.com/health",
+    "check_type": "http"
+  },
+  "checked_at": "2026-05-14T13:48:32+00:00",
+  "dashboard_url": "https://easymonitor.example.com/monitors/42"
+}
+```
+
+**Verifying the signature**
+
+Compute HMAC-SHA256 over the *raw* request body using the secret shown in your channel settings, then compare against the `X-EasyMonitor-Signature` header (without the `sha256=` prefix) using a constant-time comparison.
+
+```python
+import hmac, hashlib
+
+def verify(body: bytes, header: str, secret: str) -> bool:
+    expected = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, header)
+```
+
+```php
+$expected = 'sha256='.hash_hmac('sha256', $rawBody, $secret);
+$ok = hash_equals($expected, $request->header('X-EasyMonitor-Signature'));
+```
+
+```js
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+function verify(body, header, secret) {
+  const expected = "sha256=" + createHmac("sha256", secret).update(body).digest("hex");
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(header));
+}
+```
+
+Always sign the **raw bytes** of the body, not a re-serialized version — re-encoding can change byte-for-byte content (whitespace, key order) and the signature won't match. In Express, that means `express.raw({ type: 'application/json' })`. In Laravel, `$request->getContent()`.
+
+**Delivery semantics**
+
+Deliveries are best-effort with a 10s timeout. Failed deliveries are logged but not retried — design your receiver to be tolerant of duplicates if you queue/process asynchronously, and idempotent on `monitor.id + event + checked_at`.
 
 ## Configuration
 

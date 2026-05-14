@@ -110,6 +110,27 @@ class MonitorDown extends Notification implements ShouldQueue
     }
 
     /**
+     * Generic webhook payload — signed and POSTed by WebhookChannel.
+     *
+     * @return array<string, mixed>
+     */
+    public function toWebhook(object $notifiable): array
+    {
+        return [
+            'event' => 'monitor.down',
+            'monitor' => [
+                'id' => $this->monitor->id,
+                'name' => $this->monitor->name,
+                'url' => $this->monitor->url,
+                'check_type' => $this->monitor->check_type?->value,
+            ],
+            'error' => $this->errorMessage,
+            'checked_at' => $this->monitor->last_checked_at?->toIso8601String(),
+            'dashboard_url' => url("/monitors/{$this->monitor->id}"),
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function toArray(object $notifiable): array

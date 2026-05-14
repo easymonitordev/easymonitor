@@ -11,6 +11,7 @@ use App\Notifications\MonitorRecovered;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
+use Illuminate\Support\Str;
 use Livewire\Component;
 
 class Notifications extends Component
@@ -35,6 +36,20 @@ class Notifications extends Component
 
     public bool $newSlackActive = true;
 
+    /**
+     * Editable in-place state for each existing Webhook channel,
+     * keyed by NotificationChannel id.
+     *
+     * @var array<int, array{label: string, url: string, secret: string, is_active: bool}>
+     */
+    public array $webhookEdits = [];
+
+    public string $newWebhookLabel = '';
+
+    public string $newWebhookUrl = '';
+
+    public bool $newWebhookActive = true;
+
     public ?int $defaultChannelId = null;
 
     public function mount(): void
@@ -52,6 +67,7 @@ class Notifications extends Component
         }
 
         $this->refreshSlackEdits();
+        $this->refreshWebhookEdits();
 
         $this->defaultChannelId = $user->notificationChannels()
             ->where('is_default', true)
@@ -170,6 +186,93 @@ class Notifications extends Component
         $this->dispatch('notifications-saved');
     }
 
+    public function addWebhookChannel(): void
+    {
+        $this->validate([
+            'newWebhookLabel' => ['required', 'string', 'max:50'],
+            'newWebhookUrl' => $this->webhookUrlRules(),
+            'newWebhookActive' => ['boolean'],
+        ]);
+
+        Auth::user()->notificationChannels()->create([
+            'type' => NotificationChannelType::Webhook,
+            'label' => $this->newWebhookLabel,
+            'config' => [
+                'url' => $this->newWebhookUrl,
+                'secret' => Str::random(64),
+            ],
+            'is_active' => $this->newWebhookActive,
+            'is_default' => false,
+        ]);
+
+        $this->newWebhookLabel = '';
+        $this->newWebhookUrl = '';
+        $this->newWebhookActive = true;
+
+        $this->refreshWebhookEdits();
+
+        $this->dispatch('notifications-saved');
+    }
+
+    public function saveWebhookChannel(int $channelId): void
+    {
+        $prefix = "webhookEdits.{$channelId}";
+
+        $this->validate([
+            "{$prefix}.label" => ['required', 'string', 'max:50'],
+            "{$prefix}.url" => $this->webhookUrlRules(),
+            "{$prefix}.is_active" => ['boolean'],
+        ]);
+
+        $row = $this->webhookEdits[$channelId];
+
+        $channel = Auth::user()
+            ->notificationChannels()
+            ->where('type', NotificationChannelType::Webhook->value)
+            ->findOrFail($channelId);
+
+        // Preserve secret across edits; never let it be overwritten by the form.
+        $config = $channel->config ?? [];
+        $config['url'] = $row['url'];
+
+        $channel->update([
+            'label' => $row['label'],
+            'config' => $config,
+            'is_active' => (bool) ($row['is_active'] ?? true),
+        ]);
+
+        $this->dispatch('notifications-saved');
+    }
+
+    public function regenerateWebhookSecret(int $channelId): void
+    {
+        $channel = Auth::user()
+            ->notificationChannels()
+            ->where('type', NotificationChannelType::Webhook->value)
+            ->findOrFail($channelId);
+
+        $config = $channel->config ?? [];
+        $config['secret'] = Str::random(64);
+        $channel->update(['config' => $config]);
+
+        $this->refreshWebhookEdits();
+
+        $this->dispatch('notifications-saved');
+    }
+
+    public function deleteWebhookChannel(int $channelId): void
+    {
+        Auth::user()
+            ->notificationChannels()
+            ->where('type', NotificationChannelType::Webhook->value)
+            ->whereKey($channelId)
+            ->delete();
+
+        unset($this->webhookEdits[$channelId]);
+
+        $this->dispatch('notifications-saved');
+    }
+
     public function setDefault(int $channelId): void
     {
         $user = Auth::user();
@@ -222,6 +325,7 @@ class Notifications extends Component
         return view('livewire.settings.notifications', [
             'channels' => $channels,
             'slackChannels' => $channels->where('type', NotificationChannelType::Slack)->values(),
+            'webhookChannels' => $channels->where('type', NotificationChannelType::Webhook)->values(),
         ]);
     }
 
@@ -243,6 +347,31 @@ class Notifications extends Component
                 $channel->id => [
                     'label' => (string) $channel->label,
                     'webhook_url' => (string) ($channel->config['webhook_url'] ?? ''),
+                    'is_active' => (bool) $channel->is_active,
+                ],
+            ])
+            ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function webhookUrlRules(): array
+    {
+        return ['required', 'string', 'url', 'starts_with:https://,http://', 'max:500'];
+    }
+
+    protected function refreshWebhookEdits(): void
+    {
+        $this->webhookEdits = Auth::user()
+            ->notificationChannels()
+            ->where('type', NotificationChannelType::Webhook->value)
+            ->get()
+            ->mapWithKeys(fn (NotificationChannel $channel) => [
+                $channel->id => [
+                    'label' => (string) $channel->label,
+                    'url' => (string) ($channel->config['url'] ?? ''),
+                    'secret' => (string) ($channel->config['secret'] ?? ''),
                     'is_active' => (bool) $channel->is_active,
                 ],
             ])

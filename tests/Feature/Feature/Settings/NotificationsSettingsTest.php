@@ -193,6 +193,87 @@ test('a slack channel can be deleted', function () {
     expect($user->notificationChannels()->whereKey($existing->id)->exists())->toBeFalse();
 });
 
+test('adding a webhook channel generates a signing secret', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->set('newWebhookLabel', 'PagerDuty')
+        ->set('newWebhookUrl', 'https://example.com/hook')
+        ->call('addWebhookChannel')
+        ->assertHasNoErrors();
+
+    $webhook = $user->notificationChannels()
+        ->where('type', \App\Enums\NotificationChannelType::Webhook->value)
+        ->first();
+
+    expect($webhook)->not->toBeNull();
+    expect($webhook->label)->toBe('PagerDuty');
+    expect($webhook->config['url'])->toBe('https://example.com/hook');
+    expect($webhook->config['secret'])->toBeString();
+    expect(strlen($webhook->config['secret']))->toBe(64);
+});
+
+test('webhook channel requires a label and a url', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->call('addWebhookChannel')
+        ->assertHasErrors(['newWebhookLabel', 'newWebhookUrl']);
+});
+
+test('webhook channel rejects non-http(s) urls', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->set('newWebhookLabel', 'PagerDuty')
+        ->set('newWebhookUrl', 'ftp://example.com/hook')
+        ->call('addWebhookChannel')
+        ->assertHasErrors(['newWebhookUrl']);
+});
+
+test('saving a webhook channel preserves the signing secret', function () {
+    $user = User::factory()->create();
+    $existing = NotificationChannel::factory()->for($user)->webhook(secret: str_repeat('o', 64))->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->set("webhookEdits.{$existing->id}.label", 'Renamed')
+        ->set("webhookEdits.{$existing->id}.url", 'https://example.com/new')
+        ->call('saveWebhookChannel', $existing->id);
+
+    $existing->refresh();
+    expect($existing->label)->toBe('Renamed');
+    expect($existing->config['url'])->toBe('https://example.com/new');
+    expect($existing->config['secret'])->toBe(str_repeat('o', 64));
+});
+
+test('regenerating a webhook secret replaces it with a new random value', function () {
+    $user = User::factory()->create();
+    $existing = NotificationChannel::factory()->for($user)->webhook(secret: str_repeat('o', 64))->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->call('regenerateWebhookSecret', $existing->id);
+
+    $existing->refresh();
+    expect($existing->config['secret'])->not->toBe(str_repeat('o', 64));
+    expect(strlen($existing->config['secret']))->toBe(64);
+});
+
+test('a webhook channel can be deleted', function () {
+    $user = User::factory()->create();
+    $existing = NotificationChannel::factory()->for($user)->webhook()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->call('deleteWebhookChannel', $existing->id);
+
+    expect($user->notificationChannels()->whereKey($existing->id)->exists())->toBeFalse();
+});
+
 test('a user cannot target another user\'s channel', function () {
     $user = User::factory()->create();
     $other = User::factory()->create();

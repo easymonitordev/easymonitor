@@ -94,6 +94,26 @@ class NotificationChannel extends Model
     }
 
     /**
+     * Route generic webhook notifications to the URL stored in config.
+     */
+    public function routeNotificationForWebhook(): ?string
+    {
+        $url = $this->config['url'] ?? null;
+
+        return is_string($url) && $url !== '' ? $url : null;
+    }
+
+    /**
+     * The HMAC secret used to sign webhook deliveries.
+     */
+    public function webhookSecret(): ?string
+    {
+        $secret = $this->config['secret'] ?? null;
+
+        return is_string($secret) && $secret !== '' ? $secret : null;
+    }
+
+    /**
      * Whether the channel has the configuration it needs to send.
      */
     public function isConfigured(): bool
@@ -102,6 +122,7 @@ class NotificationChannel extends Model
             NotificationChannelType::Email => filled($this->user?->email),
             NotificationChannelType::Pushover => filled($this->config['user_key'] ?? null),
             NotificationChannelType::Slack => filled($this->config['webhook_url'] ?? null),
+            NotificationChannelType::Webhook => filled($this->config['url'] ?? null) && filled($this->config['secret'] ?? null),
         };
     }
 }
