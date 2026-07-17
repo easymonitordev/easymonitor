@@ -120,6 +120,22 @@ class MonitoringEngineUnhealthy extends Notification
     }
 
     /**
+     * ntfy publish payload.
+     *
+     * @return array<string, mixed>
+     */
+    public function toNtfy(object $notifiable): array
+    {
+        return [
+            'title' => 'EasyMonitor engine unhealthy',
+            'message' => "The {$this->component} has not run for {$this->minutesStalled()} minutes. Monitors are not being checked reliably.",
+            'priority' => 5,
+            'tags' => ['warning'],
+            'click' => url('/dashboard'),
+        ];
+    }
+
+    /**
      * Generic webhook payload — signed and POSTed by WebhookChannel.
      *
      * @return array<string, mixed>

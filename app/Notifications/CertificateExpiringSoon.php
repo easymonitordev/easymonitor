@@ -146,6 +146,28 @@ class CertificateExpiringSoon extends Notification implements ShouldQueue
     }
 
     /**
+     * ntfy publish payload.
+     *
+     * @return array<string, mixed>
+     */
+    public function toNtfy(object $notifiable): array
+    {
+        $message = "The TLS certificate for {$this->monitor->url} expires in {$this->daysRemaining} days.";
+
+        if ($this->monitor->cert_issuer) {
+            $message .= "\nIssuer: {$this->monitor->cert_issuer}";
+        }
+
+        return [
+            'title' => "{$this->monitor->name} certificate expiring",
+            'message' => $message,
+            'priority' => 4,
+            'tags' => ['lock'],
+            'click' => url("/monitors/{$this->monitor->id}"),
+        ];
+    }
+
+    /**
      * Generic webhook payload — signed and POSTed by WebhookChannel.
      *
      * @return array<string, mixed>

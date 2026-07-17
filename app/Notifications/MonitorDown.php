@@ -167,6 +167,28 @@ class MonitorDown extends Notification implements ShouldQueue
     }
 
     /**
+     * ntfy publish payload.
+     *
+     * @return array<string, mixed>
+     */
+    public function toNtfy(object $notifiable): array
+    {
+        $message = "{$this->monitor->url} is not responding.";
+
+        if ($this->errorMessage) {
+            $message .= "\nError: {$this->errorMessage}";
+        }
+
+        return [
+            'title' => "{$this->monitor->name} is DOWN",
+            'message' => $message,
+            'priority' => 5,
+            'tags' => ['red_circle'],
+            'click' => url("/monitors/{$this->monitor->id}"),
+        ];
+    }
+
+    /**
      * Generic webhook payload — signed and POSTed by WebhookChannel.
      *
      * @return array<string, mixed>

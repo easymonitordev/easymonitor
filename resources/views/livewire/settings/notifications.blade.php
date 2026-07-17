@@ -44,6 +44,9 @@
                                             @case (\App\Enums\NotificationChannelType::Telegram)
                                                 {{ __('Bot configured') }}{{ ($channel->config['chat_id'] ?? null) ? ' · '.$channel->config['chat_id'] : '' }}
                                                 @break
+                                            @case (\App\Enums\NotificationChannelType::Ntfy)
+                                                {{ ($channel->config['server_url'] ?? 'https://ntfy.sh').'/'.($channel->config['topic'] ?? '') }}
+                                                @break
                                             @case (\App\Enums\NotificationChannelType::Webhook)
                                                 {{ __('Endpoint configured') }}
                                                 @break
@@ -464,6 +467,179 @@
                                     {{ __('Saved.') }}
                                 </x-action-message>
                                 <button type="submit" class="btn btn-primary btn-sm rounded-lg">{{ __('Add Telegram chat') }}</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ntfy configuration -->
+            <div class="card bg-base-100 border border-base-300">
+                <div class="card-body gap-5">
+                    <div>
+                        <h3 class="text-sm font-semibold uppercase tracking-wider text-base-content/50">{{ __('ntfy') }}</h3>
+                        <p class="text-xs text-base-content/60 mt-1">
+                            {{ __('Push notifications via') }} <a href="https://ntfy.sh" target="_blank" rel="noopener" class="link">ntfy.sh</a>
+                            {{ __('or your self-hosted ntfy server — no account needed. Pick a hard-to-guess topic, subscribe to it in the ntfy app, and alerts arrive as push messages. The access token is only needed for protected topics.') }}
+                        </p>
+                    </div>
+
+                    @foreach ($ntfyChannels as $existing)
+                        <form wire:key="ntfy-edit-{{ $existing->id }}"
+                              wire:submit="saveNtfyChannel({{ $existing->id }})"
+                              class="border border-base-300 rounded-lg p-4 space-y-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                <div class="form-control">
+                                    <label class="label pb-1">
+                                        <span class="label-text font-medium text-sm">{{ __('Label') }}</span>
+                                    </label>
+                                    <input type="text"
+                                           wire:model="ntfyEdits.{{ $existing->id }}.label"
+                                           maxlength="50"
+                                           class="input input-bordered input-sm rounded-lg @error('ntfyEdits.'.$existing->id.'.label') input-error @enderror"
+                                           placeholder="{{ __('My phone') }}" />
+                                    @error('ntfyEdits.'.$existing->id.'.label')
+                                        <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                    @enderror
+                                </div>
+                                <div class="form-control">
+                                    <label class="label pb-1">
+                                        <span class="label-text font-medium text-sm">{{ __('Server') }}</span>
+                                    </label>
+                                    <input type="url"
+                                           wire:model="ntfyEdits.{{ $existing->id }}.server_url"
+                                           maxlength="200"
+                                           class="input input-bordered input-sm rounded-lg font-mono text-xs @error('ntfyEdits.'.$existing->id.'.server_url') input-error @enderror"
+                                           placeholder="https://ntfy.sh" />
+                                    @error('ntfyEdits.'.$existing->id.'.server_url')
+                                        <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                    @enderror
+                                </div>
+                                <div class="form-control">
+                                    <label class="label pb-1">
+                                        <span class="label-text font-medium text-sm">{{ __('Topic') }}</span>
+                                    </label>
+                                    <input type="text"
+                                           wire:model="ntfyEdits.{{ $existing->id }}.topic"
+                                           maxlength="64"
+                                           autocomplete="off"
+                                           class="input input-bordered input-sm rounded-lg font-mono text-xs @error('ntfyEdits.'.$existing->id.'.topic') input-error @enderror"
+                                           placeholder="easymonitor-a1b2c3" />
+                                    @error('ntfyEdits.'.$existing->id.'.topic')
+                                        <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                    @enderror
+                                </div>
+                                <div class="form-control">
+                                    <label class="label pb-1">
+                                        <span class="label-text font-medium text-sm">{{ __('Access Token') }}</span>
+                                        <span class="label-text-alt text-base-content/50">{{ __('Optional') }}</span>
+                                    </label>
+                                    <input type="password"
+                                           wire:model="ntfyEdits.{{ $existing->id }}.token"
+                                           maxlength="200"
+                                           autocomplete="off"
+                                           class="input input-bordered input-sm rounded-lg font-mono text-xs @error('ntfyEdits.'.$existing->id.'.token') input-error @enderror"
+                                           placeholder="tk_..." />
+                                    @error('ntfyEdits.'.$existing->id.'.token')
+                                        <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                    @enderror
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between gap-3">
+                                <label class="cursor-pointer flex items-center gap-2">
+                                    <input type="checkbox"
+                                           wire:model="ntfyEdits.{{ $existing->id }}.is_active"
+                                           class="toggle toggle-success toggle-sm" />
+                                    <span class="label-text text-sm">{{ __('Active') }}</span>
+                                </label>
+
+                                <div class="flex items-center gap-2">
+                                    <button type="button"
+                                            wire:click="deleteNtfyChannel({{ $existing->id }})"
+                                            wire:confirm="{{ __('Delete this ntfy channel?') }}"
+                                            class="btn btn-ghost btn-sm text-error">
+                                        {{ __('Delete') }}
+                                    </button>
+                                    <button type="submit" class="btn btn-primary btn-sm rounded-lg">{{ __('Save') }}</button>
+                                </div>
+                            </div>
+                        </form>
+                    @endforeach
+
+                    <form wire:submit="addNtfyChannel" class="border border-dashed border-base-300 rounded-lg p-4 space-y-4">
+                        <div class="text-xs font-semibold uppercase tracking-wider text-base-content/50">
+                            {{ $ntfyChannels->isEmpty() ? __('Add your first ntfy topic') : __('Add another ntfy topic') }}
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                            <div class="form-control">
+                                <label class="label pb-1">
+                                    <span class="label-text font-medium text-sm">{{ __('Label') }}</span>
+                                </label>
+                                <input type="text"
+                                       wire:model="newNtfyLabel"
+                                       maxlength="50"
+                                       class="input input-bordered input-sm rounded-lg @error('newNtfyLabel') input-error @enderror"
+                                       placeholder="{{ __('My phone') }}" />
+                                @error('newNtfyLabel')
+                                    <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                @enderror
+                            </div>
+                            <div class="form-control">
+                                <label class="label pb-1">
+                                    <span class="label-text font-medium text-sm">{{ __('Server') }}</span>
+                                </label>
+                                <input type="url"
+                                       wire:model="newNtfyServerUrl"
+                                       maxlength="200"
+                                       class="input input-bordered input-sm rounded-lg font-mono text-xs @error('newNtfyServerUrl') input-error @enderror"
+                                       placeholder="https://ntfy.sh" />
+                                @error('newNtfyServerUrl')
+                                    <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                @enderror
+                            </div>
+                            <div class="form-control">
+                                <label class="label pb-1">
+                                    <span class="label-text font-medium text-sm">{{ __('Topic') }}</span>
+                                </label>
+                                <input type="text"
+                                       wire:model="newNtfyTopic"
+                                       maxlength="64"
+                                       autocomplete="off"
+                                       class="input input-bordered input-sm rounded-lg font-mono text-xs @error('newNtfyTopic') input-error @enderror"
+                                       placeholder="easymonitor-a1b2c3" />
+                                @error('newNtfyTopic')
+                                    <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                @enderror
+                            </div>
+                            <div class="form-control">
+                                <label class="label pb-1">
+                                    <span class="label-text font-medium text-sm">{{ __('Access Token') }}</span>
+                                    <span class="label-text-alt text-base-content/50">{{ __('Optional') }}</span>
+                                </label>
+                                <input type="password"
+                                       wire:model="newNtfyToken"
+                                       maxlength="200"
+                                       autocomplete="off"
+                                       class="input input-bordered input-sm rounded-lg font-mono text-xs @error('newNtfyToken') input-error @enderror"
+                                       placeholder="tk_..." />
+                                @error('newNtfyToken')
+                                    <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-3">
+                            <label class="cursor-pointer flex items-center gap-2">
+                                <input type="checkbox" wire:model="newNtfyActive" class="toggle toggle-success toggle-sm" />
+                                <span class="label-text text-sm">{{ __('Active') }}</span>
+                            </label>
+
+                            <div class="flex items-center gap-3">
+                                <x-action-message on="notifications-saved">
+                                    {{ __('Saved.') }}
+                                </x-action-message>
+                                <button type="submit" class="btn btn-primary btn-sm rounded-lg">{{ __('Add ntfy topic') }}</button>
                             </div>
                         </div>
                     </form>

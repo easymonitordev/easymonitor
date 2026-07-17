@@ -122,6 +122,30 @@ class NotificationChannel extends Model
     }
 
     /**
+     * Route ntfy notifications using the server URL, topic, and optional
+     * access token stored in this channel's config payload.
+     *
+     * @return array{server_url: string, topic: string, token: ?string}|null
+     */
+    public function routeNotificationForNtfy(): ?array
+    {
+        $topic = $this->config['topic'] ?? null;
+
+        if (! is_string($topic) || $topic === '') {
+            return null;
+        }
+
+        $server = $this->config['server_url'] ?? null;
+        $token = $this->config['token'] ?? null;
+
+        return [
+            'server_url' => is_string($server) && $server !== '' ? $server : 'https://ntfy.sh',
+            'topic' => $topic,
+            'token' => is_string($token) && $token !== '' ? $token : null,
+        ];
+    }
+
+    /**
      * Route generic webhook notifications to the URL stored in config.
      */
     public function routeNotificationForWebhook(): ?string
@@ -152,6 +176,7 @@ class NotificationChannel extends Model
             NotificationChannelType::Slack => filled($this->config['webhook_url'] ?? null),
             NotificationChannelType::Discord => filled($this->config['webhook_url'] ?? null),
             NotificationChannelType::Telegram => filled($this->config['bot_token'] ?? null) && filled($this->config['chat_id'] ?? null),
+            NotificationChannelType::Ntfy => filled($this->config['topic'] ?? null),
             NotificationChannelType::Webhook => filled($this->config['url'] ?? null) && filled($this->config['secret'] ?? null),
         };
     }

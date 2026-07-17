@@ -128,6 +128,22 @@ class MonitorRecovered extends Notification implements ShouldQueue
     }
 
     /**
+     * ntfy publish payload.
+     *
+     * @return array<string, mixed>
+     */
+    public function toNtfy(object $notifiable): array
+    {
+        return [
+            'title' => "{$this->monitor->name} is back UP",
+            'message' => "{$this->monitor->url} has recovered.",
+            'priority' => 3,
+            'tags' => ['green_circle'],
+            'click' => url("/monitors/{$this->monitor->id}"),
+        ];
+    }
+
+    /**
      * Generic webhook payload — signed and POSTed by WebhookChannel.
      *
      * @return array<string, mixed>
