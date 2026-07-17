@@ -213,6 +213,20 @@ else
 fi
 set_env DB_PASSWORD "$DB_PASSWORD"
 
+# ── data retention ──────────────────────────────────────────────────────────
+header "Data retention"
+
+echo "  Raw check results are pruned automatically to keep disk usage bounded"
+echo "  (older data is also compressed). See DOCKER.md for details. You can"
+echo "  change this later in .env and re-apply with: php artisan easymonitor:retention"
+echo ""
+RETENTION_DAYS=""
+while [[ ! "$RETENTION_DAYS" =~ ^[0-9]+$ ]] || [ "$RETENTION_DAYS" -lt 8 ]; do
+    RETENTION_DAYS=$(ask "Keep raw check results for how many days? (minimum 8)" "90")
+done
+set_env CHECK_RESULT_RETENTION_DAYS "$RETENTION_DAYS"
+ok "Check results will be kept for ${RETENTION_DAYS} days (compressed after 7 days)."
+
 # ── redis ───────────────────────────────────────────────────────────────────
 header "Redis"
 
@@ -491,6 +505,13 @@ sleep 6
 # ── run inner setup ─────────────────────────────────────────────────────────
 header "Application setup"
 docker compose exec -T php bash /var/www/html/docker/scripts/setup.sh
+
+# ── apply retention policy ──────────────────────────────────────────────────
+# Migrations apply the policy on first install; re-running here makes sure a
+# changed CHECK_RESULT_RETENTION_DAYS also takes effect on existing installs.
+info "Applying check result retention policy..."
+docker compose exec -T php php artisan easymonitor:retention --no-interaction \
+    || warn "Could not apply retention policy — run 'docker compose exec php php artisan easymonitor:retention' manually."
 
 # ── recycle probe so it picks up the freshly-generated JWT_TOKEN ────────────
 # The bundled probe container started before the inner setup wrote

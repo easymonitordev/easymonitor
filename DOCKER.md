@@ -156,6 +156,30 @@ If you want to change database credentials after initial setup:
    docker compose up -d
    ```
 
+## Data Retention & Disk Usage
+
+Check results are stored in a TimescaleDB hypertable. Two policies keep disk usage bounded:
+
+- **Compression** — chunks older than 7 days are compressed (typically 90%+ smaller).
+- **Retention** — raw results older than 90 days are dropped automatically.
+
+Both are applied by the migrations and configurable in `.env`:
+
+```bash
+CHECK_RESULT_RETENTION_DAYS=90        # how long to keep raw check results
+CHECK_RESULT_COMPRESS_AFTER_DAYS=7    # compress chunks older than this
+```
+
+After changing either value, re-apply the policies:
+
+```bash
+docker compose exec php php artisan easymonitor:retention
+```
+
+Rough disk expectations before compression: a monitor on a 30-second interval with 3 probes writes about 260k rows per month (roughly 30–40 MB including indexes). With compression and the 90-day default retention, expect well under 100 MB per such monitor at steady state.
+
+Note: uptime history older than the retention window is discarded. Keep `CHECK_RESULT_RETENTION_DAYS` at least as long as the longest uptime period you want to display.
+
 ## Production Deployment
 
 For production, use the production Caddyfile:
