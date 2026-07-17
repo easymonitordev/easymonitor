@@ -5,6 +5,7 @@ use App\Models\CheckResult;
 use App\Models\Incident;
 use App\Models\Monitor;
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Livewire;
 
 test('guests are redirected to the login page', function () {
@@ -80,4 +81,43 @@ test('dashboard shows down incidents with error styling', function () {
         ->assertSee('us-east-1');
 
     expect($component->viewData('downIncidentsCount'))->toBe(1);
+});
+
+test('instance owner sees the update banner when a newer release is cached', function () {
+    config()->set('easymonitor.version', '0.1.5');
+    Cache::put('easymonitor:latest-release', [
+        'version' => '0.1.6',
+        'url' => 'https://github.com/easymonitordev/easymonitor/releases/tag/v0.1.6',
+        'published_at' => '2026-07-17T00:00:00Z',
+    ]);
+
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test(Dashboard::class)
+        ->assertSuccessful()
+        ->assertSee('EasyMonitor v0.1.6 is available')
+        ->assertSee('Release notes');
+});
+
+test('non-owner users do not see the update banner', function () {
+    config()->set('easymonitor.version', '0.1.5');
+    Cache::put('easymonitor:latest-release', ['version' => '0.1.6', 'url' => null, 'published_at' => null]);
+
+    User::factory()->create();
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test(Dashboard::class)
+        ->assertSuccessful()
+        ->assertDontSee('is available');
+});
+
+test('no update banner appears when the app is up to date', function () {
+    config()->set('easymonitor.version', '0.1.5');
+    Cache::put('easymonitor:latest-release', ['version' => '0.1.5', 'url' => null, 'published_at' => null]);
+
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test(Dashboard::class)
+        ->assertSuccessful()
+        ->assertDontSee('is available');
 });
