@@ -224,3 +224,35 @@ test('response time by node section aggregates per-node stats', function () {
         ->and($us['failures'])->toBe(1)
         ->and($us['avg'])->toBe(500);
 });
+
+test('long periods render via the raw fallback when no rollup exists', function (string $period) {
+    $user = User::factory()->create();
+    $monitor = Monitor::factory()->up()->create(['user_id' => $user->id]);
+
+    CheckResult::factory()->count(3)->create([
+        'monitor_id' => $monitor->id,
+        'is_up' => true,
+        'response_time_ms' => 120,
+        'created_at' => now()->subDays(2),
+    ]);
+
+    $this->actingAs($user);
+
+    $component = Livewire::test(Show::class, ['monitor' => $monitor])
+        ->set('period', $period)
+        ->assertSuccessful();
+
+    expect($component->viewData('totalChecks'))->toBe(3)
+        ->and($component->viewData('avgResponseTime'))->toBe(120);
+})->with(['90d', '365d']);
+
+test('the period selector includes the long-history periods', function () {
+    $user = User::factory()->create();
+    $monitor = Monitor::factory()->up()->create(['user_id' => $user->id]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Show::class, ['monitor' => $monitor])
+        ->assertSee('90 Days')
+        ->assertSee('1 Year');
+});
