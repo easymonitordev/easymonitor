@@ -33,6 +33,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Certificate Expiry Alerts
+    |--------------------------------------------------------------------------
+    |
+    | Days-remaining thresholds at which the certificate expiry alert fires
+    | for HTTPS monitors. Each monitor is alerted at most once per threshold;
+    | a renewed certificate re-arms the sequence.
+    |
+    */
+
+    'certificates' => [
+        'expiry_alert_days' => [30, 14, 7],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Check Result Retention
     |--------------------------------------------------------------------------
     |

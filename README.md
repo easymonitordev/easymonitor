@@ -17,6 +17,7 @@ EasyMonitor is a full-stack monitoring platform for your websites and APIs. Add 
 ## Features
 
 - **HTTP, ICMP, and TCP port checks** — every 30 seconds to 1 hour per monitor
+- **SSL certificate expiry monitoring** — captured during HTTPS checks; alerts at 30/14/7 days before expiry
 - **Multi-region probes** — lightweight Go binaries (~10 MB) you can deploy anywhere
 - **Consecutive-failure threshold** — configurable per monitor; no alerts on flaky single failures
 - **Multi-channel alerts** — email, Slack, Discord, generic webhooks (HMAC-signed), and Pushover (per-user, per-monitor selection) on down and recovery
@@ -150,7 +151,7 @@ Supported channels:
 | Email | Configured by the admin via `MAIL_MAILER` (log, SES, SMTP) | Uses the account email |
 | Slack | No admin setup — Slack-side only | User adds one or more [incoming webhooks](https://api.slack.com/messaging/webhooks), each labelled (e.g. `#alerts-api`, `#alerts-frontend`) — pick which ones to alert per monitor |
 | Discord | No admin setup — Discord-side only | User adds one or more [channel webhooks](https://support.discord.com/hc/en-us/articles/228383668) (Server Settings → Integrations → Webhooks), each labelled — pick which ones to alert per monitor |
-| Webhook | No admin setup | User adds one or more HTTP endpoints (any URL) — each gets an auto-generated HMAC-SHA256 secret. Payloads are signed with `X-EasyMonitor-Signature: sha256=…` and tagged with `X-EasyMonitor-Event: monitor.down\|monitor.recovered`. Pipe to PagerDuty, Zapier, n8n, custom services |
+| Webhook | No admin setup | User adds one or more HTTP endpoints (any URL) — each gets an auto-generated HMAC-SHA256 secret. Payloads are signed with `X-EasyMonitor-Signature: sha256=…` and tagged with `X-EasyMonitor-Event: monitor.down\|monitor.recovered\|certificate.expiring`. Pipe to PagerDuty, Zapier, n8n, custom services |
 | Pushover | Admin sets `PUSHOVER_APP_TOKEN` once (from [pushover.net/apps/build](https://pushover.net/apps/build)) | User pastes their user key (and optional device) |
 
 Send-test buttons on the Notifications page let each user verify their configuration end-to-end.
@@ -163,7 +164,7 @@ Webhook deliveries are HTTP `POST` with `Content-Type: application/json`. Two ev
 
 | Header | Value |
 |--------|-------|
-| `X-EasyMonitor-Event` | `monitor.down` or `monitor.recovered` |
+| `X-EasyMonitor-Event` | `monitor.down`, `monitor.recovered`, or `certificate.expiring` |
 | `X-EasyMonitor-Signature` | `sha256=<hex>` — HMAC-SHA256 of the raw body using your channel's secret |
 | `User-Agent` | `EasyMonitor-Webhook/1.0` |
 

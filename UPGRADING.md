@@ -50,6 +50,10 @@ they do not understand, so updating the server first is safe.
   automatically by `./setup.sh --upgrade`; remote probe hosts must pull and
   restart their probe. From v0.2.0 on, probes skip check types they do not
   recognize, so this class of problem cannot recur in future upgrades.
+- Certificate expiry monitoring also requires updated probes: only v0.2.0+
+  probes report certificate data. Old probes keep working for up/down
+  checks — HTTPS monitors just will not show expiry info until the probe
+  is updated.
 
 ### v0.1.5
 

@@ -49,6 +49,14 @@ func (p *Publisher) Publish(ctx context.Context, result *types.CheckResult) erro
 		fields["error"] = result.Error
 	}
 
+	if result.CertExpiresAt > 0 {
+		fields["cert_expires_at"] = strconv.FormatInt(result.CertExpiresAt, 10)
+	}
+
+	if result.CertIssuer != "" {
+		fields["cert_issuer"] = result.CertIssuer
+	}
+
 	// XADD results * check_id=42 node=node-1 ok=1 ms=123
 	entryID, err := p.client.XAdd(ctx, &redis.XAddArgs{
 		Stream: p.cfg.ResultStream,

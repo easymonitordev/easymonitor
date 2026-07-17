@@ -134,8 +134,12 @@ class ResultConsumer
         $responseTime = isset($fields['ms']) ? (int) $fields['ms'] : null;
         $statusCode = isset($fields['status_code']) ? (int) $fields['status_code'] : null;
         $errorMessage = $fields['error'] ?? null;
+        $certExpiresAt = isset($fields['cert_expires_at'])
+            ? \Illuminate\Support\Carbon::createFromTimestamp((int) $fields['cert_expires_at'])
+            : null;
+        $certIssuer = $fields['cert_issuer'] ?? null;
 
-        DB::transaction(function () use ($monitorId, $nodeId, $roundId, $isUp, $responseTime, $statusCode, $errorMessage) {
+        DB::transaction(function () use ($monitorId, $nodeId, $roundId, $isUp, $responseTime, $statusCode, $errorMessage, $certExpiresAt, $certIssuer) {
             // Auto-register / refresh the probe (used for quorum N).
             ProbeNode::recordSeen($nodeId);
 
@@ -160,6 +164,17 @@ class ResultConsumer
             $monitor->last_checked_at = now();
             if (! $isUp) {
                 $monitor->last_error = $errorMessage;
+            }
+
+            if ($certExpiresAt !== null) {
+                // A renewed certificate (expiry moved past the alerted
+                // threshold) re-arms the expiry alert.
+                if ($monitor->cert_expires_at?->notEqualTo($certExpiresAt)) {
+                    $monitor->cert_alerted_threshold_days = null;
+                }
+
+                $monitor->cert_expires_at = $certExpiresAt;
+                $monitor->cert_issuer = $certIssuer;
             }
 
             if ($roundId) {
@@ -349,21 +364,7 @@ class ResultConsumer
      */
     private function resolveChannels(Monitor $monitor): Collection
     {
-        $channels = $monitor->notificationChannels()
-            ->where('is_active', true)
-            ->get()
-            ->filter(fn ($channel) => $channel->isConfigured())
-            ->values();
-
-        if ($channels->isNotEmpty()) {
-            return $channels;
-        }
-
-        $default = $monitor->user?->defaultNotificationChannel();
-
-        return $default && $default->isConfigured()
-            ? collect([$default])
-            : collect();
+        return $monitor->alertChannels();
     }
 
     /**
