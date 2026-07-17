@@ -7,6 +7,7 @@ namespace App\Livewire;
 use App\Models\CheckResult;
 use App\Models\Incident;
 use App\Models\Monitor;
+use App\Services\UpdateChecker;
 use Livewire\Component;
 
 class Dashboard extends Component
@@ -67,7 +68,7 @@ class Dashboard extends Component
                 ->where('severity', Incident::SEVERITY_DOWN)
                 ->where(function ($q) use ($periodStart) {
                     $q->whereNull('ended_at')
-                      ->orWhere('ended_at', '>=', $periodStart);
+                        ->orWhere('ended_at', '>=', $periodStart);
                 })
                 ->get(['started_at', 'ended_at'])
                 ->sum(function ($incident) use ($periodStart) {
@@ -85,7 +86,7 @@ class Dashboard extends Component
             ->whereIn('monitor_id', $monitorIds)
             ->where(function ($q) {
                 $q->where('started_at', '>=', now()->subDay())
-                  ->orWhereNull('ended_at');
+                    ->orWhereNull('ended_at');
             })
             ->with('monitor')
             ->orderByDesc('started_at');
@@ -107,7 +108,13 @@ class Dashboard extends Component
             ->where('severity', Incident::SEVERITY_DEGRADED)
             ->count();
 
+        $updateChecker = app(UpdateChecker::class);
+        $availableUpdate = $user->isInstanceOwner() && $updateChecker->updateAvailable()
+            ? $updateChecker->latestRelease()
+            : null;
+
         return view('livewire.dashboard', [
+            'availableUpdate' => $availableUpdate,
             'monitors' => $monitors,
             'totalMonitors' => $totalMonitors,
             'activeMonitors' => $activeMonitors,

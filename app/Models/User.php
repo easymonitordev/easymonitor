@@ -70,6 +70,15 @@ class User extends Authenticatable
     }
 
     /**
+     * Determine whether this user is the instance owner (the first user,
+     * usually the operator who installed the app)
+     */
+    public function isInstanceOwner(): bool
+    {
+        return $this->id === self::query()->min('id');
+    }
+
+    /**
      * Get the user's initials
      */
     public function initials(): string

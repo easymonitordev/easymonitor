@@ -4,6 +4,35 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Application Version
+    |--------------------------------------------------------------------------
+    |
+    | The version of this EasyMonitor release. Compared against the latest
+    | GitHub release to decide whether the update banner should appear.
+    |
+    */
+
+    'version' => '0.1.5',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Update Checks
+    |--------------------------------------------------------------------------
+    |
+    | A daily job asks the GitHub releases API for the latest version and
+    | shows a dashboard banner to the instance owner when a newer release
+    | exists. Set EASYMONITOR_CHECK_UPDATES=false to disable the check
+    | entirely (e.g. for air-gapped installs). No instance data is sent.
+    |
+    */
+
+    'updates' => [
+        'enabled' => (bool) env('EASYMONITOR_CHECK_UPDATES', true),
+        'repository' => 'easymonitordev/easymonitor',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Check Result Retention
     |--------------------------------------------------------------------------
     |

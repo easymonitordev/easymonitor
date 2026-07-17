@@ -11,6 +11,11 @@
 #   6. Run migrations, generate keys, build assets, set up storage
 #
 # Re-running is safe: it will detect existing config and offer to keep it.
+#
+# Upgrading an existing install:
+#   git pull && ./setup.sh --upgrade
+# rebuilds the containers, runs migrations, and re-applies policies without
+# asking any configuration questions. See UPGRADING.md.
 
 set -e
 
@@ -115,6 +120,20 @@ set_env() {
     fi
 }
 
+# ── args ────────────────────────────────────────────────────────────────────
+UPGRADE=false
+for arg in "$@"; do
+    case "$arg" in
+        --upgrade) UPGRADE=true ;;
+        -h|--help)
+            echo "Usage: ./setup.sh            interactive install"
+            echo "       ./setup.sh --upgrade  upgrade an existing install (run 'git pull' first)"
+            exit 0
+            ;;
+        *) fail "Unknown option: $arg (try --help)" ;;
+    esac
+done
+
 # ── checks ──────────────────────────────────────────────────────────────────
 require_cmd docker
 require_cmd openssl
@@ -127,6 +146,35 @@ cat <<'BANNER'
 ╚══════════════════════════════════════════════════════════════╝
 
 BANNER
+
+# ── upgrade mode ────────────────────────────────────────────────────────────
+if $UPGRADE; then
+    header "Upgrade"
+
+    [ -s .env ] || fail "No .env found — run ./setup.sh (without --upgrade) for a first-time install."
+
+    info "Rebuilding images and restarting containers (this may take a few minutes)..."
+    docker compose up -d --build
+    ok "Containers up."
+
+    info "Waiting for services to become responsive..."
+    sleep 6
+
+    header "Application upgrade"
+    docker compose exec -T php bash /var/www/html/docker/scripts/setup.sh
+
+    info "Applying check result retention policy..."
+    docker compose exec -T php php artisan easymonitor:retention --no-interaction \
+        || warn "Could not apply retention policy — run 'docker compose exec php php artisan easymonitor:retention' manually."
+
+    info "Restarting probe..."
+    docker compose up -d --force-recreate probe >/dev/null 2>&1 || true
+
+    header "Done"
+    ok "EasyMonitor upgraded."
+    info "Check UPGRADING.md and the release notes for anything requiring manual steps."
+    exit 0
+fi
 
 # ── mode ────────────────────────────────────────────────────────────────────
 header "Install mode"

@@ -4,6 +4,21 @@
         <p class="text-base-content/70 mt-1">{{ __('Overview of your monitoring status') }}</p>
     </div>
 
+    <!-- Update Available Banner -->
+    @if ($availableUpdate)
+        <div class="mb-6 rounded-xl p-4 border bg-info/10 border-info/30">
+            <div class="flex items-center gap-3 flex-wrap">
+                <div class="w-3 h-3 rounded-full bg-info"></div>
+                <span class="font-semibold text-info">{{ __('EasyMonitor v:version is available', ['version' => $availableUpdate['version']]) }}</span>
+                <span class="text-sm text-base-content/60">{{ __('you are running v:version', ['version' => config('easymonitor.version')]) }}</span>
+                @if (!empty($availableUpdate['url']))
+                    <a href="{{ $availableUpdate['url'] }}" target="_blank" rel="noopener" class="link link-info text-sm">{{ __('Release notes') }}</a>
+                @endif
+                <span class="text-sm text-base-content/50">&middot; {{ __('run ./setup.sh --upgrade — see UPGRADING.md') }}</span>
+            </div>
+        </div>
+    @endif
+
     <!-- Overall Status Banner -->
     @if ($totalMonitors > 0)
         @php($bannerClasses = $monitorsDown > 0
