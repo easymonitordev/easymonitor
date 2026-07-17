@@ -155,12 +155,18 @@ func (c *Consumer) parseCheckJob(msg redis.XMessage) (*types.CheckJob, error) {
 		roundID = r
 	}
 
+	checkType := ""
+	if ct, ok := msg.Values["check_type"].(string); ok {
+		checkType = ct
+	}
+
 	return &types.CheckJob{
-		ID:      msg.ID,
-		CheckID: checkID,
-		URL:     url,
-		Timeout: timeout,
-		RoundID: roundID,
+		ID:        msg.ID,
+		CheckID:   checkID,
+		URL:       url,
+		Timeout:   timeout,
+		RoundID:   roundID,
+		CheckType: checkType,
 	}, nil
 }
 

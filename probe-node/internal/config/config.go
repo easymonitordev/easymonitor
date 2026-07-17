@@ -10,8 +10,8 @@ import (
 // Config holds all configuration for the probe node
 type Config struct {
 	// Node identification
-	NodeID     string
-	ProbeTags  []string
+	NodeID    string
+	ProbeTags []string
 
 	// Redis connection
 	RedisURL      string
@@ -22,12 +22,12 @@ type Config struct {
 	JWTToken string
 
 	// Stream configuration
-	CheckStream      string
-	ResultStream     string
-	ConsumerGroup    string
-	ConsumerName     string
-	BlockTimeout     time.Duration
-	BatchSize        int
+	CheckStream   string
+	ResultStream  string
+	ConsumerGroup string
+	ConsumerName  string
+	BlockTimeout  time.Duration
+	BatchSize     int
 
 	// Check configuration
 	DefaultTimeout time.Duration
@@ -41,14 +41,14 @@ type Config struct {
 func LoadFromEnv() (*Config, error) {
 	cfg := &Config{
 		// Defaults
-		CheckStream:      "checks",
-		ResultStream:     "results",
-		BlockTimeout:     5 * time.Second,
-		BatchSize:        10,
-		DefaultTimeout:   30 * time.Second,
-		MaxConcurrency:   10,
-		HealthCheckPort:  8080,
-		RedisDB:          0,
+		CheckStream:     "checks",
+		ResultStream:    "results",
+		BlockTimeout:    5 * time.Second,
+		BatchSize:       10,
+		DefaultTimeout:  30 * time.Second,
+		MaxConcurrency:  10,
+		HealthCheckPort: 8080,
+		RedisDB:         0,
 	}
 
 	// Required fields

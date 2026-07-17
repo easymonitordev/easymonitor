@@ -16,7 +16,7 @@ EasyMonitor is a full-stack monitoring platform for your websites and APIs. Add 
 
 ## Features
 
-- **HTTP and ICMP checks** — every 30 seconds to 1 hour per monitor
+- **HTTP, ICMP, and TCP port checks** — every 30 seconds to 1 hour per monitor
 - **Multi-region probes** — lightweight Go binaries (~10 MB) you can deploy anywhere
 - **Consecutive-failure threshold** — configurable per monitor; no alerts on flaky single failures
 - **Multi-channel alerts** — email, Slack, Discord, generic webhooks (HMAC-signed), and Pushover (per-user, per-monitor selection) on down and recovery
@@ -45,7 +45,7 @@ EasyMonitor is a full-stack monitoring platform for your websites and APIs. Add 
                 ▼                                       ▲
        ┌────────────────┐                       ┌──────┴────────┐
        │ Redis Streams  │ ◀──── XADD results ───┤ Probe nodes   │
-       │ checks/results │       (HTTP, ICMP)    │ (Go, multi-r.)│
+       │ checks/results │    (HTTP, ICMP, TCP)  │ (Go, multi-r.)│
        └────────────────┘                       └───────────────┘
                 │
                 ▼
@@ -184,7 +184,7 @@ Webhook deliveries are HTTP `POST` with `Content-Type: application/json`. Two ev
 }
 ```
 
-`error` is `null` when the failure has no diagnostic message. `check_type` is `http` or `icmp`.
+`error` is `null` when the failure has no diagnostic message. `check_type` is `http`, `icmp`, or `tcp`.
 
 **`monitor.recovered` body**
 

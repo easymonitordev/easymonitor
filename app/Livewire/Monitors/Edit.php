@@ -5,6 +5,7 @@ namespace App\Livewire\Monitors;
 use App\Enums\CheckType;
 use App\Models\Monitor;
 use App\Models\Project;
+use App\Services\MonitorTargetRules;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -22,6 +23,10 @@ class Edit extends Component
     public string $checkType = 'http';
 
     public string $url = '';
+
+    public string $tcpHost = '';
+
+    public ?int $tcpPort = null;
 
     public int $checkInterval = 60;
 
@@ -46,6 +51,11 @@ class Edit extends Component
         $this->name = $monitor->name;
         $this->checkType = $monitor->check_type->value;
         $this->url = $monitor->url;
+
+        if ($monitor->check_type === CheckType::Tcp) {
+            ['host' => $this->tcpHost, 'port' => $this->tcpPort] = MonitorTargetRules::splitHostPort($monitor->url);
+        }
+
         $this->checkInterval = $monitor->check_interval;
         $this->isActive = $monitor->is_active;
         $this->failureThreshold = $monitor->failure_threshold ?? 1;
@@ -61,15 +71,11 @@ class Edit extends Component
      */
     public function rules(): array
     {
-        $urlRule = $this->checkType === CheckType::Icmp->value
-            ? ['required', 'string', 'max:255', 'regex:/^(?!.*:\/\/)[a-zA-Z0-9](?:[a-zA-Z0-9.\-:]*[a-zA-Z0-9])?$/']
-            : ['required', 'url', 'max:255'];
-
         return [
             'projectId' => ['nullable', 'exists:projects,id'],
             'name' => ['required', 'string', 'max:255'],
-            'checkType' => ['required', Rule::in([CheckType::Http->value, CheckType::Icmp->value])],
-            'url' => $urlRule,
+            'checkType' => ['required', Rule::in(CheckType::values())],
+            ...MonitorTargetRules::for($this->checkType),
             'checkInterval' => ['required', 'integer', 'min:30', 'max:3600'],
             'isActive' => ['boolean'],
             'failureThreshold' => ['required', 'integer', 'min:1', 'max:10'],
@@ -85,9 +91,7 @@ class Edit extends Component
      */
     public function messages(): array
     {
-        return [
-            'url.regex' => __('Enter a valid hostname or IP address (no scheme, no path).'),
-        ];
+        return MonitorTargetRules::messages();
     }
 
     /**
@@ -98,6 +102,10 @@ class Edit extends Component
         $this->authorize('update', $this->monitor);
 
         $validated = $this->validate();
+
+        $validated['url'] = MonitorTargetRules::urlFromInput(
+            $this->checkType, $this->url, $this->tcpHost, $this->tcpPort
+        );
 
         // If assigning to a project, verify access and clear team_id
         if ($validated['projectId']) {
