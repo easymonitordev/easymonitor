@@ -4,17 +4,22 @@ declare(strict_types=1);
 
 namespace App\Jobs\MonitoringEngine;
 
+use App\Models\User;
+use App\Notifications\MonitoringEngineUnhealthy;
+use App\Services\MonitoringEngine\EngineHealth;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 
 /**
  * Watchdog job that monitors the health of monitoring jobs
  *
  * This job runs every minute to check if DispatchMonitorChecks and
- * ProcessMonitorResults are running properly. If a job hasn't run
- * in > 2 minutes, it alerts that the queue may be stalled.
+ * ProcessMonitorResults are running properly. If a job hasn't run in
+ * > 2 minutes, it alerts the instance owner through their default
+ * notification channel (rate-limited to once per hour per component).
  */
 class MonitoringWatchdog implements ShouldQueue
 {
@@ -26,9 +31,9 @@ class MonitoringWatchdog implements ShouldQueue
     public int $timeout = 60;
 
     /**
-     * The maximum age (in seconds) before considering a job stalled
+     * How long to suppress repeat alerts for the same component
      */
-    private const STALL_THRESHOLD = 120;
+    private const ALERT_COOLDOWN_SECONDS = 3600;
 
     /**
      * Create a new job instance
@@ -41,62 +46,47 @@ class MonitoringWatchdog implements ShouldQueue
     /**
      * Execute the job
      */
-    public function handle(): void
+    public function handle(EngineHealth $engineHealth): void
     {
-        $this->checkDispatcherHealth();
-        $this->checkResultProcessorHealth();
-    }
-
-    /**
-     * Check if DispatchMonitorChecks is running
-     */
-    private function checkDispatcherHealth(): void
-    {
-        $lastRun = Cache::get('monitor:dispatch-checks:last-run');
-
-        if (! $lastRun) {
-            Log::warning('MonitoringWatchdog: DispatchMonitorChecks has never run.');
-
-            return;
-        }
-
-        $secondsSinceLastRun = now()->diffInSeconds($lastRun);
-
-        if ($secondsSinceLastRun > self::STALL_THRESHOLD) {
-            Log::critical('MonitoringWatchdog: DispatchMonitorChecks appears to be stalled', [
-                'last_run' => $lastRun,
-                'seconds_since_last_run' => $secondsSinceLastRun,
-                'threshold' => self::STALL_THRESHOLD,
-            ]);
-
-            // TODO: Send alert notification (email, Slack, etc.)
-            // This could integrate with your notification system
+        foreach ($engineHealth->componentStatuses() as $status) {
+            match ($status['status']) {
+                EngineHealth::STATUS_UNKNOWN => Log::warning(
+                    "MonitoringWatchdog: {$status['component']} has never run (or its heartbeat expired)."
+                ),
+                EngineHealth::STATUS_STALLED => $this->alertStalled($status),
+                default => null,
+            };
         }
     }
 
     /**
-     * Check if ProcessMonitorResults is running
+     * Log and notify the instance owner about a stalled component
+     *
+     * @param  array{component: string, status: string, seconds_since_last_run: ?int, message: string}  $status
      */
-    private function checkResultProcessorHealth(): void
+    private function alertStalled(array $status): void
     {
-        $lastRun = Cache::get('monitor:process-results:last-run');
+        Log::critical("MonitoringWatchdog: {$status['component']} appears to be stalled", [
+            'seconds_since_last_run' => $status['seconds_since_last_run'],
+            'threshold' => EngineHealth::STALL_THRESHOLD_SECONDS,
+        ]);
 
-        if (! $lastRun) {
-            Log::warning('MonitoringWatchdog: ProcessMonitorResults has never run.');
+        $cooldownKey = 'monitor:watchdog:alerted:'.str_replace(' ', '-', $status['component']);
 
+        if (! Cache::add($cooldownKey, true, self::ALERT_COOLDOWN_SECONDS)) {
             return;
         }
 
-        $secondsSinceLastRun = now()->diffInSeconds($lastRun);
+        $channel = User::query()->orderBy('id')->first()?->defaultNotificationChannel();
 
-        if ($secondsSinceLastRun > self::STALL_THRESHOLD) {
-            Log::critical('MonitoringWatchdog: ProcessMonitorResults appears to be stalled', [
-                'last_run' => $lastRun,
-                'seconds_since_last_run' => $secondsSinceLastRun,
-                'threshold' => self::STALL_THRESHOLD,
-            ]);
-
-            // TODO: Send alert notification (email, Slack, etc.)
+        if ($channel === null) {
+            return;
         }
+
+        // sendNow: the queue may be the very thing that is broken here.
+        Notification::sendNow(
+            $channel,
+            new MonitoringEngineUnhealthy($status['component'], $status['seconds_since_last_run'] ?? 0)
+        );
     }
 }

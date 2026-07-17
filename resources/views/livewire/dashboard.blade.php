@@ -4,6 +4,22 @@
         <p class="text-base-content/70 mt-1">{{ __('Overview of your monitoring status') }}</p>
     </div>
 
+    <!-- Engine Health Banner -->
+    @if (count($engineStalledComponents) > 0)
+        <div class="mb-6 rounded-xl p-4 border bg-error/10 border-error/30">
+            <div class="flex items-center gap-3 flex-wrap">
+                <div class="w-3 h-3 rounded-full bg-error animate-pulse"></div>
+                <span class="font-semibold text-error">{{ __('Monitoring engine unhealthy') }}</span>
+                @foreach ($engineStalledComponents as $stalled)
+                    <span class="text-sm text-error/80" wire:key="engine-stalled-{{ $loop->index }}">
+                        {{ __($stalled['message']) }} ({{ __('stalled for :minutes min', ['minutes' => max(1, (int) floor($stalled['seconds_since_last_run'] / 60))]) }})
+                    </span>
+                @endforeach
+                <span class="text-sm text-base-content/60">{{ __('check the queue workers — docker compose logs php') }}</span>
+            </div>
+        </div>
+    @endif
+
     <!-- Update Available Banner -->
     @if ($availableUpdate)
         <div class="mb-6 rounded-xl p-4 border bg-info/10 border-info/30">
