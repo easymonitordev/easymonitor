@@ -41,6 +41,9 @@
                                             @case (\App\Enums\NotificationChannelType::Discord)
                                                 {{ __('Webhook configured') }}
                                                 @break
+                                            @case (\App\Enums\NotificationChannelType::Telegram)
+                                                {{ __('Bot configured') }}{{ ($channel->config['chat_id'] ?? null) ? ' · '.$channel->config['chat_id'] : '' }}
+                                                @break
                                             @case (\App\Enums\NotificationChannelType::Webhook)
                                                 {{ __('Endpoint configured') }}
                                                 @break
@@ -314,6 +317,153 @@
                                     {{ __('Saved.') }}
                                 </x-action-message>
                                 <button type="submit" class="btn btn-primary btn-sm rounded-lg">{{ __('Add Discord channel') }}</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Telegram configuration -->
+            <div class="card bg-base-100 border border-base-300">
+                <div class="card-body gap-5">
+                    <div>
+                        <h3 class="text-sm font-semibold uppercase tracking-wider text-base-content/50">{{ __('Telegram') }}</h3>
+                        <p class="text-xs text-base-content/60 mt-1">
+                            {{ __('Message') }} <span class="font-mono text-xs">@BotFather</span> {{ __('on Telegram, send') }}
+                            <span class="font-mono text-xs">/newbot</span>{{ __(', and copy the bot token. Then start a chat with your bot (or add it to a group) and get the chat id from') }}
+                            <span class="font-mono text-xs">@userinfobot</span>
+                            {{ __('or the getUpdates API. Add as many chats as you need.') }}
+                        </p>
+                    </div>
+
+                    @foreach ($telegramChannels as $existing)
+                        <form wire:key="telegram-edit-{{ $existing->id }}"
+                              wire:submit="saveTelegramChannel({{ $existing->id }})"
+                              class="border border-base-300 rounded-lg p-4 space-y-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div class="form-control">
+                                    <label class="label pb-1">
+                                        <span class="label-text font-medium text-sm">{{ __('Label') }}</span>
+                                    </label>
+                                    <input type="text"
+                                           wire:model="telegramEdits.{{ $existing->id }}.label"
+                                           maxlength="50"
+                                           class="input input-bordered input-sm rounded-lg @error('telegramEdits.'.$existing->id.'.label') input-error @enderror"
+                                           placeholder="{{ __('Ops group') }}" />
+                                    @error('telegramEdits.'.$existing->id.'.label')
+                                        <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                    @enderror
+                                </div>
+                                <div class="form-control">
+                                    <label class="label pb-1">
+                                        <span class="label-text font-medium text-sm">{{ __('Bot Token') }}</span>
+                                    </label>
+                                    <input type="password"
+                                           wire:model="telegramEdits.{{ $existing->id }}.bot_token"
+                                           maxlength="100"
+                                           autocomplete="off"
+                                           class="input input-bordered input-sm rounded-lg font-mono text-xs @error('telegramEdits.'.$existing->id.'.bot_token') input-error @enderror"
+                                           placeholder="123456789:AA..." />
+                                    @error('telegramEdits.'.$existing->id.'.bot_token')
+                                        <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                    @enderror
+                                </div>
+                                <div class="form-control">
+                                    <label class="label pb-1">
+                                        <span class="label-text font-medium text-sm">{{ __('Chat ID') }}</span>
+                                    </label>
+                                    <input type="text"
+                                           wire:model="telegramEdits.{{ $existing->id }}.chat_id"
+                                           maxlength="100"
+                                           autocomplete="off"
+                                           class="input input-bordered input-sm rounded-lg font-mono text-xs @error('telegramEdits.'.$existing->id.'.chat_id') input-error @enderror"
+                                           placeholder="-100123456789" />
+                                    @error('telegramEdits.'.$existing->id.'.chat_id')
+                                        <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                    @enderror
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between gap-3">
+                                <label class="cursor-pointer flex items-center gap-2">
+                                    <input type="checkbox"
+                                           wire:model="telegramEdits.{{ $existing->id }}.is_active"
+                                           class="toggle toggle-success toggle-sm" />
+                                    <span class="label-text text-sm">{{ __('Active') }}</span>
+                                </label>
+
+                                <div class="flex items-center gap-2">
+                                    <button type="button"
+                                            wire:click="deleteTelegramChannel({{ $existing->id }})"
+                                            wire:confirm="{{ __('Delete this Telegram channel?') }}"
+                                            class="btn btn-ghost btn-sm text-error">
+                                        {{ __('Delete') }}
+                                    </button>
+                                    <button type="submit" class="btn btn-primary btn-sm rounded-lg">{{ __('Save') }}</button>
+                                </div>
+                            </div>
+                        </form>
+                    @endforeach
+
+                    <form wire:submit="addTelegramChannel" class="border border-dashed border-base-300 rounded-lg p-4 space-y-4">
+                        <div class="text-xs font-semibold uppercase tracking-wider text-base-content/50">
+                            {{ $telegramChannels->isEmpty() ? __('Add your first Telegram chat') : __('Add another Telegram chat') }}
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div class="form-control">
+                                <label class="label pb-1">
+                                    <span class="label-text font-medium text-sm">{{ __('Label') }}</span>
+                                </label>
+                                <input type="text"
+                                       wire:model="newTelegramLabel"
+                                       maxlength="50"
+                                       class="input input-bordered input-sm rounded-lg @error('newTelegramLabel') input-error @enderror"
+                                       placeholder="{{ __('Ops group') }}" />
+                                @error('newTelegramLabel')
+                                    <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                @enderror
+                            </div>
+                            <div class="form-control">
+                                <label class="label pb-1">
+                                    <span class="label-text font-medium text-sm">{{ __('Bot Token') }}</span>
+                                </label>
+                                <input type="password"
+                                       wire:model="newTelegramBotToken"
+                                       maxlength="100"
+                                       autocomplete="off"
+                                       class="input input-bordered input-sm rounded-lg font-mono text-xs @error('newTelegramBotToken') input-error @enderror"
+                                       placeholder="123456789:AA..." />
+                                @error('newTelegramBotToken')
+                                    <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                @enderror
+                            </div>
+                            <div class="form-control">
+                                <label class="label pb-1">
+                                    <span class="label-text font-medium text-sm">{{ __('Chat ID') }}</span>
+                                </label>
+                                <input type="text"
+                                       wire:model="newTelegramChatId"
+                                       maxlength="100"
+                                       autocomplete="off"
+                                       class="input input-bordered input-sm rounded-lg font-mono text-xs @error('newTelegramChatId') input-error @enderror"
+                                       placeholder="-100123456789" />
+                                @error('newTelegramChatId')
+                                    <span class="label-text-alt text-error mt-1">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-3">
+                            <label class="cursor-pointer flex items-center gap-2">
+                                <input type="checkbox" wire:model="newTelegramActive" class="toggle toggle-success toggle-sm" />
+                                <span class="label-text text-sm">{{ __('Active') }}</span>
+                            </label>
+
+                            <div class="flex items-center gap-3">
+                                <x-action-message on="notifications-saved">
+                                    {{ __('Saved.') }}
+                                </x-action-message>
+                                <button type="submit" class="btn btn-primary btn-sm rounded-lg">{{ __('Add Telegram chat') }}</button>
                             </div>
                         </div>
                     </form>

@@ -104,6 +104,24 @@ class NotificationChannel extends Model
     }
 
     /**
+     * Route Telegram notifications using the bot token and chat id stored
+     * in this channel's config payload.
+     *
+     * @return array{bot_token: string, chat_id: string}|null
+     */
+    public function routeNotificationForTelegram(): ?array
+    {
+        $botToken = $this->config['bot_token'] ?? null;
+        $chatId = $this->config['chat_id'] ?? null;
+
+        if (! is_string($botToken) || $botToken === '' || ! is_string($chatId) || $chatId === '') {
+            return null;
+        }
+
+        return ['bot_token' => $botToken, 'chat_id' => $chatId];
+    }
+
+    /**
      * Route generic webhook notifications to the URL stored in config.
      */
     public function routeNotificationForWebhook(): ?string
@@ -133,6 +151,7 @@ class NotificationChannel extends Model
             NotificationChannelType::Pushover => filled($this->config['user_key'] ?? null),
             NotificationChannelType::Slack => filled($this->config['webhook_url'] ?? null),
             NotificationChannelType::Discord => filled($this->config['webhook_url'] ?? null),
+            NotificationChannelType::Telegram => filled($this->config['bot_token'] ?? null) && filled($this->config['chat_id'] ?? null),
             NotificationChannelType::Webhook => filled($this->config['url'] ?? null) && filled($this->config['secret'] ?? null),
         };
     }

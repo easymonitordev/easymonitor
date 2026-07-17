@@ -356,3 +356,63 @@ test('a user cannot target another user\'s channel', function () {
 
     expect($other->defaultNotificationChannel()->is_default)->toBeTrue();
 });
+
+test('adding a telegram channel creates a new notification channel', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    $token = '123456789:'.str_repeat('A', 35);
+
+    Livewire::test(Notifications::class)
+        ->set('newTelegramLabel', 'Ops group')
+        ->set('newTelegramBotToken', $token)
+        ->set('newTelegramChatId', '-100123456789')
+        ->call('addTelegramChannel')
+        ->assertHasNoErrors();
+
+    $telegram = $user->notificationChannels()
+        ->where('type', NotificationChannelType::Telegram->value)
+        ->first();
+
+    expect($telegram)->not->toBeNull();
+    expect($telegram->label)->toBe('Ops group');
+    expect($telegram->config['bot_token'])->toBe($token);
+    expect($telegram->config['chat_id'])->toBe('-100123456789');
+});
+
+test('telegram channel validation rejects malformed tokens and chat ids', function (string $field, string $value, string $errorField) {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->set('newTelegramLabel', 'Ops')
+        ->set('newTelegramBotToken', $field === 'token' ? $value : '123456789:'.str_repeat('A', 35))
+        ->set('newTelegramChatId', $field === 'chat' ? $value : '123456')
+        ->call('addTelegramChannel')
+        ->assertHasErrors($errorField);
+})->with([
+    'token without colon' => ['token', 'notatoken', 'newTelegramBotToken'],
+    'token too short' => ['token', '123:abc', 'newTelegramBotToken'],
+    'chat with spaces' => ['chat', 'not a chat', 'newTelegramChatId'],
+    'channel name too short' => ['chat', '@abc', 'newTelegramChatId'],
+]);
+
+test('a telegram channel can be updated and deleted', function () {
+    $user = User::factory()->create();
+    $channel = NotificationChannel::factory()->for($user)->telegram()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->set("telegramEdits.{$channel->id}.label", 'Renamed')
+        ->set("telegramEdits.{$channel->id}.chat_id", '@mychannel')
+        ->call('saveTelegramChannel', $channel->id)
+        ->assertHasNoErrors();
+
+    expect($channel->fresh()->label)->toBe('Renamed')
+        ->and($channel->fresh()->config['chat_id'])->toBe('@mychannel');
+
+    Livewire::test(Notifications::class)
+        ->call('deleteTelegramChannel', $channel->id);
+
+    expect(NotificationChannel::find($channel->id))->toBeNull();
+});

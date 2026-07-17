@@ -114,6 +114,20 @@ class MonitorRecovered extends Notification implements ShouldQueue
     }
 
     /**
+     * Telegram message (HTML formatting).
+     *
+     * @return array<string, string>
+     */
+    public function toTelegram(object $notifiable): array
+    {
+        return ['text' => implode("\n", [
+            '🟢 <b>'.e($this->monitor->name).'</b> is back UP',
+            e($this->monitor->url),
+            '<a href="'.url("/monitors/{$this->monitor->id}").'">View Monitor</a>',
+        ])];
+    }
+
+    /**
      * Generic webhook payload — signed and POSTed by WebhookChannel.
      *
      * @return array<string, mixed>

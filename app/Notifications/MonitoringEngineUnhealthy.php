@@ -106,6 +106,20 @@ class MonitoringEngineUnhealthy extends Notification
     }
 
     /**
+     * Telegram message (HTML formatting).
+     *
+     * @return array<string, string>
+     */
+    public function toTelegram(object $notifiable): array
+    {
+        return ['text' => implode("\n", [
+            '⚠️ <b>EasyMonitor monitoring engine is unhealthy</b>',
+            'The '.e($this->component)." has not run for {$this->minutesStalled()} minutes. Monitors are not being checked reliably.",
+            '<a href="'.url('/dashboard').'">Open Dashboard</a>',
+        ])];
+    }
+
+    /**
      * Generic webhook payload — signed and POSTed by WebhookChannel.
      *
      * @return array<string, mixed>
