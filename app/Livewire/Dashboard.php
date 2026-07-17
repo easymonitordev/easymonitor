@@ -7,6 +7,7 @@ namespace App\Livewire;
 use App\Models\CheckResult;
 use App\Models\Incident;
 use App\Models\Monitor;
+use App\Services\MonitoringEngine\EngineHealth;
 use App\Services\UpdateChecker;
 use Livewire\Component;
 
@@ -114,6 +115,7 @@ class Dashboard extends Component
             : null;
 
         return view('livewire.dashboard', [
+            'engineStalledComponents' => app(EngineHealth::class)->stalledComponents(),
             'availableUpdate' => $availableUpdate,
             'monitors' => $monitors,
             'totalMonitors' => $totalMonitors,

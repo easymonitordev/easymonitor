@@ -121,3 +121,23 @@ test('no update banner appears when the app is up to date', function () {
         ->assertSuccessful()
         ->assertDontSee('is available');
 });
+
+test('dashboard shows an engine health banner when the dispatch loop stalls', function () {
+    Cache::put('monitor:dispatch-checks:last-run', now()->subSeconds(600), 3600);
+    Cache::put('monitor:process-results:last-run', now()->subSeconds(10), 3600);
+
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test(Dashboard::class)
+        ->assertSuccessful()
+        ->assertSee('Monitoring engine unhealthy')
+        ->assertSee('checks are not being dispatched');
+});
+
+test('no engine health banner appears when heartbeats are fresh or absent', function () {
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test(Dashboard::class)
+        ->assertSuccessful()
+        ->assertDontSee('Monitoring engine unhealthy');
+});

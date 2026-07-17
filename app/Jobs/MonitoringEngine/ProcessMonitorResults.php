@@ -84,8 +84,9 @@ class ProcessMonitorResults implements ShouldQueue
                 Log::info("ProcessMonitorResults: Processed {$processed} result(s).");
             }
 
-            // Update watchdog timestamp
-            Cache::put('monitor:process-results:last-run', now(), 300);
+            // Update watchdog timestamp. Long TTL so the watchdog can still
+            // measure how stale the heartbeat is during a prolonged outage.
+            Cache::put('monitor:process-results:last-run', now(), 86400);
         } finally {
             $lock->release();
         }
@@ -99,7 +100,7 @@ class ProcessMonitorResults implements ShouldQueue
      */
     private function requeueJob(): void
     {
-        dispatch(new self())->delay(now()->addSeconds(self::REQUEUE_DELAY));
+        dispatch(new self)->delay(now()->addSeconds(self::REQUEUE_DELAY));
     }
 
     /**
