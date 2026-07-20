@@ -87,4 +87,15 @@ class MonitorFactory extends Factory
             'url' => fake()->domainName(),
         ]);
     }
+
+    /**
+     * Indicate that the monitor is a TCP port check
+     */
+    public function tcp(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'check_type' => \App\Enums\CheckType::Tcp,
+            'url' => fake()->domainName().':'.fake()->numberBetween(1, 65535),
+        ]);
+    }
 }

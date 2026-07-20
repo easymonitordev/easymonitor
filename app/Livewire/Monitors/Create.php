@@ -6,6 +6,7 @@ use App\Enums\CheckType;
 use App\Models\Monitor;
 use App\Models\Project;
 use App\Models\Team;
+use App\Services\MonitorTargetRules;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Url;
@@ -25,6 +26,10 @@ class Create extends Component
     public string $checkType = 'http';
 
     public string $url = '';
+
+    public string $tcpHost = '';
+
+    public ?int $tcpPort = null;
 
     public int $checkInterval = 60;
 
@@ -58,16 +63,12 @@ class Create extends Component
      */
     public function rules(): array
     {
-        $urlRule = $this->checkType === CheckType::Icmp->value
-            ? ['required', 'string', 'max:255', 'regex:/^(?!.*:\/\/)[a-zA-Z0-9](?:[a-zA-Z0-9.\-:]*[a-zA-Z0-9])?$/']
-            : ['required', 'url', 'max:255'];
-
         return [
             'teamId' => ['nullable', 'exists:teams,id'],
             'projectId' => ['nullable', 'exists:projects,id'],
             'name' => ['required', 'string', 'max:255'],
-            'checkType' => ['required', Rule::in([CheckType::Http->value, CheckType::Icmp->value])],
-            'url' => $urlRule,
+            'checkType' => ['required', Rule::in(CheckType::values())],
+            ...MonitorTargetRules::for($this->checkType),
             'checkInterval' => ['required', 'integer', 'min:30', 'max:3600'],
             'isActive' => ['boolean'],
             'failureThreshold' => ['required', 'integer', 'min:1', 'max:10'],
@@ -83,9 +84,7 @@ class Create extends Component
      */
     public function messages(): array
     {
-        return [
-            'url.regex' => __('Enter a valid hostname or IP address (no scheme, no path).'),
-        ];
+        return MonitorTargetRules::messages();
     }
 
     /**
@@ -96,6 +95,10 @@ class Create extends Component
         $this->authorize('create', Monitor::class);
 
         $validated = $this->validate();
+
+        $validated['url'] = MonitorTargetRules::urlFromInput(
+            $this->checkType, $this->url, $this->tcpHost, $this->tcpPort
+        );
 
         // Verify user has access to selected team if provided
         if ($validated['teamId']) {

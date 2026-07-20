@@ -325,3 +325,80 @@ test('monitors index shows personal monitors', function () {
         ->assertSee('Monitor 2')
         ->assertDontSee($otherMonitor->name);
 });
+
+test('user can create a tcp monitor with host and port', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user);
+
+    Livewire::test(Create::class)
+        ->set('name', 'Postgres')
+        ->set('checkType', 'tcp')
+        ->set('tcpHost', 'db.example.com')
+        ->set('tcpPort', 5432)
+        ->set('checkInterval', 60)
+        ->call('save')
+        ->assertRedirect(route('monitors.index'));
+
+    $this->assertDatabaseHas('monitors', [
+        'user_id' => $user->id,
+        'name' => 'Postgres',
+        'check_type' => 'tcp',
+        'url' => 'db.example.com:5432',
+    ]);
+});
+
+test('tcp monitor validation rejects bad hosts and ports', function (string $host, mixed $port, string $errorField) {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Create::class)
+        ->set('name', 'Bad TCP')
+        ->set('checkType', 'tcp')
+        ->set('tcpHost', $host)
+        ->set('tcpPort', $port)
+        ->call('save')
+        ->assertHasErrors($errorField);
+})->with([
+    'missing host' => ['', 5432, 'tcpHost'],
+    'host with scheme' => ['tcp://db.example.com', 5432, 'tcpHost'],
+    'host with embedded port' => ['db.example.com:5432', 5432, 'tcpHost'],
+    'port zero' => ['db.example.com', 0, 'tcpPort'],
+    'port too large' => ['db.example.com', 70000, 'tcpPort'],
+    'missing port' => ['db.example.com', null, 'tcpPort'],
+]);
+
+test('editing a tcp monitor splits and recombines host and port', function () {
+    $user = User::factory()->create();
+    $monitor = Monitor::factory()->tcp()->create([
+        'user_id' => $user->id,
+        'url' => 'db.example.com:5432',
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Edit::class, ['monitor' => $monitor])
+        ->assertSet('tcpHost', 'db.example.com')
+        ->assertSet('tcpPort', 5432)
+        ->set('tcpPort', 6432)
+        ->call('save')
+        ->assertRedirect(route('monitors.show', $monitor));
+
+    expect($monitor->fresh()->url)->toBe('db.example.com:6432');
+});
+
+test('switching a monitor from tcp to http requires a url', function () {
+    $user = User::factory()->create();
+    $monitor = Monitor::factory()->tcp()->create([
+        'user_id' => $user->id,
+        'url' => 'db.example.com:5432',
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Edit::class, ['monitor' => $monitor])
+        ->set('checkType', 'http')
+        ->set('url', 'db.example.com:5432')
+        ->call('save')
+        ->assertHasErrors('url');
+});

@@ -72,13 +72,15 @@ class CheckDispatcher
         // so ResultConsumer can apply quorum across probes.
         $roundId = (string) \Illuminate\Support\Str::uuid();
 
-        // For ICMP monitors, the URL column stores a bare host. The probe node
-        // discriminates check types by URL scheme, so we prefix icmp://.
-        $url = $monitor->check_type === CheckType::Icmp
-            ? 'icmp://'.$monitor->url
-            : $monitor->url;
+        // For non-HTTP monitors, the URL column stores a bare host (ICMP) or
+        // host:port (TCP). Probes discriminate check types by URL scheme, so
+        // we prefix the type's scheme. check_type is also sent explicitly:
+        // probes from v0.2.0 on use it to skip types they do not understand
+        // instead of misreporting them as down.
+        $checkType = $monitor->check_type ?? CheckType::Http;
+        $url = $checkType->dispatchPrefix().$monitor->url;
 
-        // XADD checks * check_id=42 url=... timeout=... round_id=...
+        // XADD checks * check_id=42 url=... timeout=... round_id=... check_type=...
         $entryId = Redis::connection('streams')->xadd(
             self::STREAM_CHECKS,
             '*', // Auto-generate ID
@@ -87,6 +89,7 @@ class CheckDispatcher
                 'url' => $url,
                 'timeout' => (string) ($monitor->check_interval * 1000), // milliseconds
                 'round_id' => $roundId,
+                'check_type' => $checkType->value,
             ]
         );
 

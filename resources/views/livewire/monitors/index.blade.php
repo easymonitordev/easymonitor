@@ -75,8 +75,8 @@
                                 <a href="{{ route('monitors.show', $monitor) }}" wire:navigate class="flex-1 min-w-0 group">
                                     <div class="flex items-center gap-2">
                                         <span class="font-semibold group-hover:underline truncate">{{ $monitor->name }}</span>
-                                        @if ($monitor->check_type === \App\Enums\CheckType::Icmp)
-                                            <span class="badge badge-info badge-sm font-mono">{{ __('ICMP') }}</span>
+                                        @if ($monitor->check_type !== \App\Enums\CheckType::Http)
+                                            <span class="badge badge-info badge-sm font-mono">{{ __($monitor->check_type->shortLabel()) }}</span>
                                         @endif
                                         @if ($monitor->project)
                                             <span class="badge badge-ghost badge-sm gap-1">

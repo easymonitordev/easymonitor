@@ -42,6 +42,15 @@ they do not understand, so updating the server first is safe.
 
 ## Version-specific notes
 
+### v0.2.0
+
+- **Update remote probes when upgrading the server.** TCP checks are new in
+  this release; probes older than v0.2.0 do not understand them and would
+  report TCP monitors as down. The bundled local probe is rebuilt
+  automatically by `./setup.sh --upgrade`; remote probe hosts must pull and
+  restart their probe. From v0.2.0 on, probes skip check types they do not
+  recognize, so this class of problem cannot recur in future upgrades.
+
 ### v0.1.5
 
 - A data retention policy now applies to raw check results (90 days by

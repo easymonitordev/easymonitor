@@ -84,9 +84,10 @@ func main() {
 	pub := publisher.NewPublisher(redisClient, cfg)
 	httpChecker := checker.NewHTTPChecker()
 	icmpChecker := checker.NewICMPChecker()
+	tcpChecker := checker.NewTCPChecker()
 
 	// Create check handler
-	checkHandler := createCheckHandler(cfg, pub, httpChecker, icmpChecker)
+	checkHandler := createCheckHandler(cfg, pub, httpChecker, icmpChecker, tcpChecker)
 
 	// Setup graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -142,12 +143,30 @@ func main() {
 	}
 }
 
+// resolveCheckType returns the job's explicit check type, falling back to
+// URL-scheme detection for jobs from servers older than v0.2.0.
+func resolveCheckType(job *types.CheckJob) string {
+	if job.CheckType != "" {
+		return job.CheckType
+	}
+
+	switch {
+	case strings.HasPrefix(job.URL, "icmp://"):
+		return "icmp"
+	case strings.HasPrefix(job.URL, "tcp://"):
+		return "tcp"
+	default:
+		return "http"
+	}
+}
+
 // createCheckHandler creates the handler function for processing check jobs
 func createCheckHandler(
 	cfg *config.Config,
 	pub *publisher.Publisher,
 	httpChecker *checker.HTTPChecker,
 	icmpChecker *checker.ICMPChecker,
+	tcpChecker *checker.TCPChecker,
 ) func(*types.CheckJob) error {
 	// Create semaphore for concurrency control
 	sem := make(chan struct{}, cfg.MaxConcurrency)
@@ -167,14 +186,21 @@ func createCheckHandler(
 
 		var result *types.CheckResult
 
-		// Determine check type based on URL
-		if strings.HasPrefix(job.URL, "icmp://") {
-			// ICMP check
+		switch resolveCheckType(job) {
+		case "icmp":
 			host := strings.TrimPrefix(job.URL, "icmp://")
 			result = icmpChecker.Check(job.CheckID, cfg.NodeID, host, timeout)
-		} else {
-			// HTTP/HTTPS check (default)
+		case "tcp":
+			hostPort := strings.TrimPrefix(job.URL, "tcp://")
+			result = tcpChecker.Check(job.CheckID, cfg.NodeID, hostPort, timeout)
+		case "http":
 			result = httpChecker.Check(job.CheckID, cfg.NodeID, job.URL, timeout)
+		default:
+			// A check type this probe doesn't understand (newer server).
+			// Skip without publishing: a missing result must not become a
+			// false down. Acknowledged so the stream doesn't back up.
+			log.Printf("Skipping check_id=%d: unknown check type %q — probe update required", job.CheckID, job.CheckType)
+			return nil
 		}
 
 		// Propagate round_id so the server can group this result with other
