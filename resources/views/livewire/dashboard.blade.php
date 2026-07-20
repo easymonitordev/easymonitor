@@ -275,4 +275,23 @@
             </div>
         </div>
     </div>
+
+    <!-- System footer: version + engine state -->
+    <div class="mt-8 flex items-center justify-center gap-2 text-xs text-base-content/40">
+        <a href="https://github.com/easymonitordev/easymonitor/releases/tag/v{{ $appVersion }}"
+           target="_blank" rel="noopener" class="hover:text-base-content/70">
+            EasyMonitor v{{ $appVersion }}
+        </a>
+        <span>&middot;</span>
+        @if (count($engineStalledComponents) > 0)
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-error"></span>
+            <span>{{ __('monitoring engine unhealthy') }}</span>
+        @elseif ($engineHealthy)
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-success"></span>
+            <span>{{ __('monitoring engine operational') }}</span>
+        @else
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-base-content/30"></span>
+            <span>{{ __('monitoring engine starting') }}</span>
+        @endif
+    </div>
 </div>

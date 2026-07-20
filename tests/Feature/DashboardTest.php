@@ -141,3 +141,36 @@ test('no engine health banner appears when heartbeats are fresh or absent', func
         ->assertSuccessful()
         ->assertDontSee('Monitoring engine unhealthy');
 });
+
+test('dashboard footer shows the running version with engine state', function () {
+    config()->set('easymonitor.version', '0.2.0');
+    Cache::put('monitor:dispatch-checks:last-run', now()->subSeconds(10), 3600);
+    Cache::put('monitor:process-results:last-run', now()->subSeconds(10), 3600);
+
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test(Dashboard::class)
+        ->assertSuccessful()
+        ->assertSee('EasyMonitor v0.2.0')
+        ->assertSee('monitoring engine operational');
+});
+
+test('dashboard footer shows a neutral engine state before the first heartbeat', function () {
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test(Dashboard::class)
+        ->assertSuccessful()
+        ->assertSee('monitoring engine starting')
+        ->assertDontSee('monitoring engine operational');
+});
+
+test('dashboard footer flags an unhealthy engine', function () {
+    Cache::put('monitor:dispatch-checks:last-run', now()->subSeconds(600), 3600);
+    Cache::put('monitor:process-results:last-run', now()->subSeconds(10), 3600);
+
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test(Dashboard::class)
+        ->assertSuccessful()
+        ->assertSee('monitoring engine unhealthy');
+});
