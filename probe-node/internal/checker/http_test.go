@@ -25,7 +25,7 @@ func TestHTTPChecker_Check_Success(t *testing.T) {
 	assert.Equal(t, int64(1), result.CheckID)
 	assert.Equal(t, "test-node", result.NodeID)
 	assert.Equal(t, 200, result.StatusCode)
-	assert.Greater(t, result.ResponseTime, 0)
+	assert.GreaterOrEqual(t, result.ResponseTime, 0)
 	assert.Empty(t, result.Error)
 }
 

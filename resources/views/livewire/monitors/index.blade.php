@@ -78,6 +78,9 @@
                                         @if ($monitor->check_type !== \App\Enums\CheckType::Http)
                                             <span class="badge badge-info badge-sm font-mono">{{ __($monitor->check_type->shortLabel()) }}</span>
                                         @endif
+                                        @if ($monitor->certDaysRemaining() !== null && $monitor->certDaysRemaining() <= 14)
+                                            <span class="badge badge-warning badge-sm">{{ __('Cert: :days d', ['days' => max(0, $monitor->certDaysRemaining())]) }}</span>
+                                        @endif
                                         @if ($monitor->project)
                                             <span class="badge badge-ghost badge-sm gap-1">
                                                 @if ($monitor->project->color)

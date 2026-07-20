@@ -78,6 +78,17 @@ func (h *HTTPChecker) Check(checkID int64, nodeID, url string, timeout time.Dura
 
 	result.StatusCode = resp.StatusCode
 
+	// The TLS handshake already happened for HTTPS checks — capture the
+	// certificate expiry for free so the server can alert before it lapses.
+	if resp.TLS != nil && len(resp.TLS.PeerCertificates) > 0 {
+		cert := resp.TLS.PeerCertificates[0]
+		result.CertExpiresAt = cert.NotAfter.Unix()
+		result.CertIssuer = cert.Issuer.CommonName
+		if result.CertIssuer == "" && len(cert.Issuer.Organization) > 0 {
+			result.CertIssuer = cert.Issuer.Organization[0]
+		}
+	}
+
 	// Consider 2xx and 3xx as successful
 	if resp.StatusCode >= 200 && resp.StatusCode < 400 {
 		result.OK = true

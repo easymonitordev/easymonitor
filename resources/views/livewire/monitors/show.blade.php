@@ -38,6 +38,18 @@
                 @endif
             </div>
             <p class="text-sm text-base-content/70 mt-1 ml-12">{{ $monitor->url }}</p>
+            @if ($monitor->certDaysRemaining() !== null)
+                <p class="text-sm mt-0.5 ml-12 {{ $monitor->certDaysRemaining() <= 14 ? 'text-warning font-medium' : 'text-base-content/50' }}">
+                    @if ($monitor->certDaysRemaining() < 0)
+                        {{ __('Certificate expired :days days ago', ['days' => abs($monitor->certDaysRemaining())]) }}
+                    @else
+                        {{ __('Certificate expires in :days days', ['days' => $monitor->certDaysRemaining()]) }}
+                    @endif
+                    @if ($monitor->cert_issuer)
+                        <span class="text-base-content/40">&middot; {{ $monitor->cert_issuer }}</span>
+                    @endif
+                </p>
+            @endif
         </div>
         <a href="{{ route('monitors.edit', $monitor) }}" wire:navigate class="btn btn-ghost btn-sm">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

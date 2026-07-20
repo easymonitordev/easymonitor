@@ -14,13 +14,15 @@ type CheckJob struct {
 
 // CheckResult represents the result of a monitoring check
 type CheckResult struct {
-	CheckID      int64
-	NodeID       string
-	RoundID      string // Echoed back from the job so the server can group per-probe results
-	OK           bool
-	ResponseTime int    // Response time in milliseconds
-	StatusCode   int    // HTTP status code (0 for non-HTTP checks)
-	Error        string // Error message if check failed
+	CheckID       int64
+	NodeID        string
+	RoundID       string // Echoed back from the job so the server can group per-probe results
+	OK            bool
+	ResponseTime  int    // Response time in milliseconds
+	StatusCode    int    // HTTP status code (0 for non-HTTP checks)
+	Error         string // Error message if check failed
+	CertExpiresAt int64  // TLS certificate NotAfter as unix seconds (0 when no TLS)
+	CertIssuer    string // TLS certificate issuer (empty when no TLS)
 }
 
 // CheckType represents the type of monitoring check

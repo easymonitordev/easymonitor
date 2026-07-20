@@ -197,3 +197,43 @@ test('active probe count excludes stale ones', function () {
 
     expect(ProbeNode::activeCount())->toBe(2);
 });
+
+test('certificate data from a result is stored on the monitor', function () {
+    $monitor = makeMonitor();
+    $expiry = now()->addDays(45)->startOfSecond();
+
+    $fields = resultFields($monitor->id, 'probe-1', Str::uuid()->toString(), true);
+    $fields['cert_expires_at'] = (string) $expiry->getTimestamp();
+    $fields['cert_issuer'] = 'R11';
+
+    (new ResultConsumer)->processResult($fields);
+
+    $fresh = $monitor->fresh();
+    expect($fresh->cert_expires_at->getTimestamp())->toBe($expiry->getTimestamp())
+        ->and($fresh->cert_issuer)->toBe('R11');
+});
+
+test('a renewed certificate re-arms the expiry alert threshold', function () {
+    $monitor = makeMonitor([
+        'cert_expires_at' => now()->addDays(5),
+        'cert_alerted_threshold_days' => 7,
+    ]);
+
+    $fields = resultFields($monitor->id, 'probe-1', Str::uuid()->toString(), true);
+    $fields['cert_expires_at'] = (string) now()->addDays(90)->getTimestamp();
+
+    (new ResultConsumer)->processResult($fields);
+
+    expect($monitor->fresh()->cert_alerted_threshold_days)->toBeNull();
+});
+
+test('results without certificate data leave existing cert fields untouched', function () {
+    $expiry = now()->addDays(30)->startOfSecond();
+    $monitor = makeMonitor(['cert_expires_at' => $expiry, 'cert_issuer' => 'R11']);
+
+    (new ResultConsumer)->processResult(resultFields($monitor->id, 'probe-1', Str::uuid()->toString(), true));
+
+    $fresh = $monitor->fresh();
+    expect($fresh->cert_expires_at->getTimestamp())->toBe($expiry->getTimestamp())
+        ->and($fresh->cert_issuer)->toBe('R11');
+});

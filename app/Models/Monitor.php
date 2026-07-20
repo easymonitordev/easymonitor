@@ -36,6 +36,9 @@ class Monitor extends Model
         'consecutive_failures',
         'failure_threshold',
         'last_decided_round_id',
+        'cert_expires_at',
+        'cert_issuer',
+        'cert_alerted_threshold_days',
     ];
 
     /**
@@ -49,8 +52,48 @@ class Monitor extends Model
             'is_active' => 'boolean',
             'last_checked_at' => 'datetime',
             'next_run_at' => 'datetime',
+            'cert_expires_at' => 'datetime',
             'check_type' => CheckType::class,
         ];
+    }
+
+    /**
+     * Days until the TLS certificate expires (negative when already expired),
+     * or null when no certificate has been observed.
+     */
+    public function certDaysRemaining(): ?int
+    {
+        if ($this->cert_expires_at === null) {
+            return null;
+        }
+
+        return (int) floor(now()->diffInDays($this->cert_expires_at, false));
+    }
+
+    /**
+     * The notification channels alerts for this monitor should go to:
+     * the monitor's attached active channels, falling back to the owner's
+     * default channel (legacy monitors with none attached).
+     *
+     * @return \Illuminate\Support\Collection<int, NotificationChannel>
+     */
+    public function alertChannels(): \Illuminate\Support\Collection
+    {
+        $channels = $this->notificationChannels()
+            ->where('is_active', true)
+            ->get()
+            ->filter(fn (NotificationChannel $channel) => $channel->isConfigured())
+            ->values();
+
+        if ($channels->isNotEmpty()) {
+            return $channels->toBase();
+        }
+
+        $default = $this->user?->defaultNotificationChannel();
+
+        return $default && $default->isConfigured()
+            ? collect([$default])
+            : collect();
     }
 
     /**
