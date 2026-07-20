@@ -47,6 +47,61 @@ test('user can save custom css', function () {
     expect($sp->fresh()->custom_css)->toBe($css);
 });
 
+test('custom css containing html markup is rejected', function () {
+    $user = User::factory()->create();
+    $sp = StatusPage::factory()->create(['user_id' => $user->id]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Manage::class, ['statusPage' => $sp])
+        ->set('customCss', '</style><script>alert(document.domain)</script>')
+        ->call('saveBranding')
+        ->assertHasErrors('customCss');
+
+    expect($sp->fresh()->custom_css)->toBeNull();
+});
+
+test('stored custom css cannot break out of the style tag on the public page', function () {
+    $user = User::factory()->create();
+    $sp = StatusPage::factory()->create([
+        'user_id' => $user->id,
+        'visibility' => 'public',
+        'custom_css' => '</style><script>alert(document.domain)</script>',
+    ]);
+
+    $response = $this->get(route('public.status', $sp->slug))->assertSuccessful();
+
+    expect($response->getContent())
+        ->not->toContain('</style><script>')
+        ->not->toContain('<script>alert');
+});
+
+test('renderable custom css escapes every angle bracket', function () {
+    $sp = StatusPage::factory()->make([
+        'custom_css' => '.a { color: red; } </style><img src=x onerror=alert(1)>',
+    ]);
+
+    expect($sp->renderableCustomCss())
+        ->not->toContain('<')
+        ->toContain('\3c ');
+});
+
+test('public status page sends a content security policy that blocks scripts', function () {
+    $user = User::factory()->create();
+    $sp = StatusPage::factory()->create([
+        'user_id' => $user->id,
+        'visibility' => 'public',
+    ]);
+
+    $response = $this->get(route('public.status', $sp->slug))->assertSuccessful();
+
+    $csp = $response->headers->get('Content-Security-Policy');
+
+    expect($csp)
+        ->toContain("default-src 'none'")
+        ->toContain("style-src 'self' 'unsafe-inline'");
+});
+
 test('custom css is rendered on public page', function () {
     $user = User::factory()->create();
     $css = '.my-custom-class-xyz { color: red; }';

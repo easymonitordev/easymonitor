@@ -7,10 +7,10 @@ namespace App\Http\Controllers;
 use App\Models\Incident;
 use App\Models\StatusPage;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\View\View;
+use Illuminate\Support\Facades\Vite;
 
 class PublicStatusPageController extends Controller
 {
@@ -24,7 +24,7 @@ class PublicStatusPageController extends Controller
      *
      * For unlisted/private misses we 404 — never leak existence.
      */
-    public function show(Request $request, string $slug): View
+    public function show(Request $request, string $slug): Response
     {
         $statusPage = StatusPage::where('slug', $slug)->first();
 
@@ -39,7 +39,7 @@ class PublicStatusPageController extends Controller
      * Resolve the status page when a request hits a verified custom domain.
      * Used by the home route as a host-based fallback.
      */
-    public function showByDomain(Request $request): View
+    public function showByDomain(Request $request): Response
     {
         $host = strtolower($request->getHost());
 
@@ -77,7 +77,7 @@ class PublicStatusPageController extends Controller
     /**
      * Shared rendering for both slug-based and custom-domain routes.
      */
-    private function renderStatusPage(Request $request, StatusPage $statusPage): View
+    private function renderStatusPage(Request $request, StatusPage $statusPage): Response
     {
         $this->enforceVisibility($request, $statusPage);
 
@@ -95,7 +95,7 @@ class PublicStatusPageController extends Controller
         $monitors = $sections->flatMap(fn ($s) => $s['monitors'])->sortBy('id')->values();
         $monitorStats = $this->computeMonitorStats($monitors->pluck('id')->all());
 
-        return view('public.status', [
+        $response = response()->view('public.status', [
             'statusPage' => $statusPage,
             'monitors' => $monitors,
             'monitorStats' => $monitorStats,
@@ -103,6 +103,32 @@ class PublicStatusPageController extends Controller
             'activeIncidents' => $activeIncidents,
             'upcomingMaintenance' => $upcomingMaintenance,
             'recentIncidents' => $recentIncidents,
+        ]);
+
+        if (! Vite::isRunningHot()) {
+            $response->headers->set('Content-Security-Policy', $this->contentSecurityPolicy());
+        }
+
+        return $response;
+    }
+
+    /**
+     * CSP for public status pages. User-supplied custom CSS is rendered inline,
+     * so inline styles stay allowed while scripts are denied entirely — a
+     * second line of defense should any markup ever reach the page. Skipped
+     * while the Vite dev server is running, since hot reload needs its own
+     * script and websocket origins.
+     */
+    private function contentSecurityPolicy(): string
+    {
+        return implode('; ', [
+            "default-src 'none'",
+            "style-src 'self' 'unsafe-inline' https://fonts.bunny.net",
+            "font-src 'self' https://fonts.bunny.net",
+            "img-src 'self' data: https:",
+            "base-uri 'none'",
+            "form-action 'none'",
+            "frame-ancestors 'self'",
         ]);
     }
 
@@ -326,7 +352,7 @@ class PublicStatusPageController extends Controller
             ->where('severity', Incident::SEVERITY_DOWN)
             ->where(function ($q) use ($periodStart) {
                 $q->whereNull('ended_at')
-                  ->orWhere('ended_at', '>=', $periodStart);
+                    ->orWhere('ended_at', '>=', $periodStart);
             })
             ->get(['started_at', 'ended_at'])
             ->sum(function ($incident) use ($periodStart) {
