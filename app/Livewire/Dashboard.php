@@ -114,8 +114,16 @@ class Dashboard extends Component
             ? $updateChecker->latestRelease()
             : null;
 
+        $engineStatuses = collect(app(EngineHealth::class)->componentStatuses());
+        $engineStalledComponents = $engineStatuses
+            ->where('status', EngineHealth::STATUS_STALLED)
+            ->values()
+            ->all();
+
         return view('livewire.dashboard', [
-            'engineStalledComponents' => app(EngineHealth::class)->stalledComponents(),
+            'appVersion' => config('easymonitor.version'),
+            'engineHealthy' => $engineStatuses->every(fn (array $status) => $status['status'] === EngineHealth::STATUS_HEALTHY),
+            'engineStalledComponents' => $engineStalledComponents,
             'availableUpdate' => $availableUpdate,
             'monitors' => $monitors,
             'totalMonitors' => $totalMonitors,
