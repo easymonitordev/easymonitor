@@ -20,7 +20,7 @@ EasyMonitor is a full-stack monitoring platform for your websites and APIs. Add 
 - **SSL certificate expiry monitoring** — captured during HTTPS checks; alerts at 30/14/7 days before expiry
 - **Multi-region probes** — lightweight Go binaries (~10 MB) you can deploy anywhere
 - **Consecutive-failure threshold** — configurable per monitor; no alerts on flaky single failures
-- **Multi-channel alerts** — email, Slack, Discord, generic webhooks (HMAC-signed), and Pushover (per-user, per-monitor selection) on down and recovery
+- **Multi-channel alerts** — email, Slack, Discord, Telegram, generic webhooks (HMAC-signed), and Pushover (per-user, per-monitor selection) on down and recovery
 - **Projects** — group related monitors (e.g. main site + APIs)
 - **Teams** — share monitors and projects with collaborators with role-based access
 - **Status pages** — public, unlisted (secret link), or private
@@ -152,6 +152,7 @@ Supported channels:
 | Slack | No admin setup — Slack-side only | User adds one or more [incoming webhooks](https://api.slack.com/messaging/webhooks), each labelled (e.g. `#alerts-api`, `#alerts-frontend`) — pick which ones to alert per monitor |
 | Discord | No admin setup — Discord-side only | User adds one or more [channel webhooks](https://support.discord.com/hc/en-us/articles/228383668) (Server Settings → Integrations → Webhooks), each labelled — pick which ones to alert per monitor |
 | Webhook | No admin setup | User adds one or more HTTP endpoints (any URL) — each gets an auto-generated HMAC-SHA256 secret. Payloads are signed with `X-EasyMonitor-Signature: sha256=…` and tagged with `X-EasyMonitor-Event: monitor.down\|monitor.recovered\|certificate.expiring`. Pipe to PagerDuty, Zapier, n8n, custom services |
+| Telegram | No admin setup — Telegram-side only | User creates a bot via [@BotFather](https://t.me/BotFather), then adds the bot token + chat id per chat/group, each labelled — pick which ones to alert per monitor |
 | Pushover | Admin sets `PUSHOVER_APP_TOKEN` once (from [pushover.net/apps/build](https://pushover.net/apps/build)) | User pastes their user key (and optional device) |
 
 Send-test buttons on the Notifications page let each user verify their configuration end-to-end.

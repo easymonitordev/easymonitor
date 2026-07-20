@@ -66,6 +66,18 @@ class NotificationChannelFactory extends Factory
         ]);
     }
 
+    public function telegram(?string $botToken = null, ?string $chatId = null, ?string $label = null): static
+    {
+        return $this->state(fn () => [
+            'type' => NotificationChannelType::Telegram,
+            'label' => $label ?? 'Ops group',
+            'config' => [
+                'bot_token' => $botToken ?? '123456789:'.str_repeat('A', 35),
+                'chat_id' => $chatId ?? '-100123456789',
+            ],
+        ]);
+    }
+
     public function webhook(?string $url = null, ?string $label = null, ?string $secret = null): static
     {
         return $this->state(fn () => [

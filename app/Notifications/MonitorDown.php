@@ -146,6 +146,27 @@ class MonitorDown extends Notification implements ShouldQueue
     }
 
     /**
+     * Telegram message (HTML formatting).
+     *
+     * @return array<string, string>
+     */
+    public function toTelegram(object $notifiable): array
+    {
+        $lines = [
+            '🔴 <b>'.e($this->monitor->name).'</b> is DOWN',
+            e($this->monitor->url),
+        ];
+
+        if ($this->errorMessage) {
+            $lines[] = 'Error: '.e($this->errorMessage);
+        }
+
+        $lines[] = '<a href="'.url("/monitors/{$this->monitor->id}").'">View Monitor</a>';
+
+        return ['text' => implode("\n", $lines)];
+    }
+
+    /**
      * Generic webhook payload — signed and POSTed by WebhookChannel.
      *
      * @return array<string, mixed>

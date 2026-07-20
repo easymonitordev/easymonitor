@@ -51,6 +51,22 @@ class Notifications extends Component
     public bool $newDiscordActive = true;
 
     /**
+     * Editable in-place state for each existing Telegram channel,
+     * keyed by NotificationChannel id.
+     *
+     * @var array<int, array{label: string, bot_token: string, chat_id: string, is_active: bool}>
+     */
+    public array $telegramEdits = [];
+
+    public string $newTelegramLabel = '';
+
+    public string $newTelegramBotToken = '';
+
+    public string $newTelegramChatId = '';
+
+    public bool $newTelegramActive = true;
+
+    /**
      * Editable in-place state for each existing Webhook channel,
      * keyed by NotificationChannel id.
      *
@@ -82,6 +98,7 @@ class Notifications extends Component
 
         $this->refreshSlackEdits();
         $this->refreshDiscordEdits();
+        $this->refreshTelegramEdits();
         $this->refreshWebhookEdits();
 
         $this->defaultChannelId = $user->notificationChannels()
@@ -275,6 +292,85 @@ class Notifications extends Component
         $this->dispatch('notifications-saved');
     }
 
+    public function addTelegramChannel(): void
+    {
+        $this->validate(
+            [
+                'newTelegramLabel' => ['required', 'string', 'max:50'],
+                'newTelegramBotToken' => $this->telegramBotTokenRules(),
+                'newTelegramChatId' => $this->telegramChatIdRules(),
+                'newTelegramActive' => ['boolean'],
+            ],
+            $this->telegramMessages('newTelegramBotToken', 'newTelegramChatId'),
+        );
+
+        Auth::user()->notificationChannels()->create([
+            'type' => NotificationChannelType::Telegram,
+            'label' => $this->newTelegramLabel,
+            'config' => [
+                'bot_token' => $this->newTelegramBotToken,
+                'chat_id' => $this->newTelegramChatId,
+            ],
+            'is_active' => $this->newTelegramActive,
+            'is_default' => false,
+        ]);
+
+        $this->newTelegramLabel = '';
+        $this->newTelegramBotToken = '';
+        $this->newTelegramChatId = '';
+        $this->newTelegramActive = true;
+
+        $this->refreshTelegramEdits();
+
+        $this->dispatch('notifications-saved');
+    }
+
+    public function saveTelegramChannel(int $channelId): void
+    {
+        $prefix = "telegramEdits.{$channelId}";
+
+        $this->validate(
+            [
+                "{$prefix}.label" => ['required', 'string', 'max:50'],
+                "{$prefix}.bot_token" => $this->telegramBotTokenRules(),
+                "{$prefix}.chat_id" => $this->telegramChatIdRules(),
+                "{$prefix}.is_active" => ['boolean'],
+            ],
+            $this->telegramMessages("{$prefix}.bot_token", "{$prefix}.chat_id"),
+        );
+
+        $row = $this->telegramEdits[$channelId];
+
+        $channel = Auth::user()
+            ->notificationChannels()
+            ->where('type', NotificationChannelType::Telegram->value)
+            ->findOrFail($channelId);
+
+        $channel->update([
+            'label' => $row['label'],
+            'config' => [
+                'bot_token' => $row['bot_token'],
+                'chat_id' => $row['chat_id'],
+            ],
+            'is_active' => (bool) ($row['is_active'] ?? true),
+        ]);
+
+        $this->dispatch('notifications-saved');
+    }
+
+    public function deleteTelegramChannel(int $channelId): void
+    {
+        Auth::user()
+            ->notificationChannels()
+            ->where('type', NotificationChannelType::Telegram->value)
+            ->whereKey($channelId)
+            ->delete();
+
+        unset($this->telegramEdits[$channelId]);
+
+        $this->dispatch('notifications-saved');
+    }
+
     public function addWebhookChannel(): void
     {
         $this->validate([
@@ -415,6 +511,7 @@ class Notifications extends Component
             'channels' => $channels,
             'slackChannels' => $channels->where('type', NotificationChannelType::Slack)->values(),
             'discordChannels' => $channels->where('type', NotificationChannelType::Discord)->values(),
+            'telegramChannels' => $channels->where('type', NotificationChannelType::Telegram)->values(),
             'webhookChannels' => $channels->where('type', NotificationChannelType::Webhook)->values(),
         ]);
     }
@@ -467,6 +564,50 @@ class Notifications extends Component
                 $channel->id => [
                     'label' => (string) $channel->label,
                     'webhook_url' => (string) ($channel->config['webhook_url'] ?? ''),
+                    'is_active' => (bool) $channel->is_active,
+                ],
+            ])
+            ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function telegramBotTokenRules(): array
+    {
+        return ['required', 'string', 'max:100', 'regex:/^\d+:[A-Za-z0-9_-]{30,}$/'];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function telegramChatIdRules(): array
+    {
+        return ['required', 'string', 'max:100', 'regex:/^(@[A-Za-z0-9_]{5,}|-?\d+)$/'];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function telegramMessages(string $tokenField, string $chatField): array
+    {
+        return [
+            "{$tokenField}.regex" => __('Paste the bot token from @BotFather (looks like 123456789:AA...).'),
+            "{$chatField}.regex" => __('Enter a numeric chat id (e.g. 123456789 or -100123456789) or a public @channelname.'),
+        ];
+    }
+
+    protected function refreshTelegramEdits(): void
+    {
+        $this->telegramEdits = Auth::user()
+            ->notificationChannels()
+            ->where('type', NotificationChannelType::Telegram->value)
+            ->get()
+            ->mapWithKeys(fn (NotificationChannel $channel) => [
+                $channel->id => [
+                    'label' => (string) $channel->label,
+                    'bot_token' => (string) ($channel->config['bot_token'] ?? ''),
+                    'chat_id' => (string) ($channel->config['chat_id'] ?? ''),
                     'is_active' => (bool) $channel->is_active,
                 ],
             ])

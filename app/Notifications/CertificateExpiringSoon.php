@@ -124,6 +124,28 @@ class CertificateExpiringSoon extends Notification implements ShouldQueue
     }
 
     /**
+     * Telegram message (HTML formatting).
+     *
+     * @return array<string, string>
+     */
+    public function toTelegram(object $notifiable): array
+    {
+        $lines = [
+            '🔒 <b>'.e($this->monitor->name).'</b> TLS certificate expires in <b>'.$this->daysRemaining.' days</b>',
+            e($this->monitor->url),
+            'Expires: '.$this->monitor->cert_expires_at?->format('M d, Y H:i T'),
+        ];
+
+        if ($this->monitor->cert_issuer) {
+            $lines[] = 'Issuer: '.e($this->monitor->cert_issuer);
+        }
+
+        $lines[] = '<a href="'.url("/monitors/{$this->monitor->id}").'">View Monitor</a>';
+
+        return ['text' => implode("\n", $lines)];
+    }
+
+    /**
      * Generic webhook payload — signed and POSTed by WebhookChannel.
      *
      * @return array<string, mixed>
