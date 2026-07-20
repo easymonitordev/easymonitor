@@ -6,6 +6,7 @@ namespace App\Livewire\Monitors;
 
 use App\Models\Incident;
 use App\Models\Monitor;
+use App\Services\CheckResultRollupService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -48,8 +49,23 @@ class Show extends Component
             '24h' => now()->subDay(),
             '7d' => now()->subWeek(),
             '30d' => now()->subMonth(),
+            '90d' => now()->subDays(90),
+            '365d' => now()->subDays(365),
             default => now()->subDay(),
         };
+    }
+
+    /**
+     * Long periods read from the hourly rollup instead of raw check_results,
+     * because raw rows older than the retention window are dropped.
+     */
+    private function usesRollup(): bool
+    {
+        if (! in_array($this->period, ['90d', '365d'], true)) {
+            return false;
+        }
+
+        return once(fn () => app(CheckResultRollupService::class)->isQueryable());
     }
 
     /**
@@ -73,6 +89,8 @@ class Show extends Component
             '24h' => 'H:i',
             '7d' => 'M d H:i',
             '30d' => 'M d',
+            '90d' => 'M d',
+            '365d' => 'M d, Y',
             default => 'H:i',
         };
 
@@ -81,10 +99,17 @@ class Show extends Component
             '24h' => 86400,
             '7d' => 604800,
             '30d' => 2592000,
+            '90d' => 7776000,
+            '365d' => 31536000,
             default => 86400,
         };
 
-        $bucketSeconds = max(30, intdiv($periodSeconds, self::CHART_BUCKETS));
+        // Rollup-backed periods must bucket in whole hours: the rollup's
+        // finest grain is one hour, and date_bin buckets that are not a
+        // multiple of it would split hourly rows unevenly.
+        $bucketSeconds = $this->usesRollup()
+            ? max(3600, intdiv($periodSeconds, self::CHART_BUCKETS * 3600) * 3600)
+            : max(30, intdiv($periodSeconds, self::CHART_BUCKETS));
         $intervalString = $bucketSeconds.' seconds';
 
         return ['', $dateFormat, $intervalString, $bucketSeconds];
@@ -97,6 +122,10 @@ class Show extends Component
     {
         if (DB::connection()->getDriverName() !== 'pgsql') {
             return collect();
+        }
+
+        if ($this->usesRollup()) {
+            return $this->smoothEmptyBuckets($this->getChartDataRollup($periodStart));
         }
 
         return $this->smoothEmptyBuckets($this->getChartDataPgsql($periodStart));
@@ -187,6 +216,54 @@ class Show extends Component
     }
 
     /**
+     * Chart data for long periods, read from the hourly rollup so history
+     * beyond the raw retention window is preserved.
+     *
+     * @return Collection<int, array{time: string, total: int, up: int, down: int, failed_nodes: array<int, string>}>
+     */
+    private function getChartDataRollup(\Illuminate\Support\Carbon $periodStart): Collection
+    {
+        [, $dateFormat, $interval, $bucketSeconds] = $this->getChartConfig();
+
+        $rows = DB::select('
+            SELECT
+                date_bin(?, bucket, ?) AS chart_bucket,
+                SUM(total) AS total,
+                SUM(up_count) AS up_count,
+                SUM(down_count) AS down_count,
+                STRING_AGG(DISTINCT CASE WHEN down_count > 0 THEN node_id END, \',\') AS failed_nodes
+            FROM '.CheckResultRollupService::VIEW_NAME.'
+            WHERE monitor_id = ?
+              AND bucket >= ?
+            GROUP BY chart_bucket
+            ORDER BY chart_bucket
+        ', [
+            $interval,
+            $periodStart,
+            $this->monitor->id,
+            $periodStart,
+        ]);
+
+        $byBucket = collect($rows)->keyBy(fn ($row) => \Carbon\Carbon::parse($row->chart_bucket)->getTimestamp());
+
+        return $this->buildBucketTimeline($periodStart, $bucketSeconds, $dateFormat, function (int $ts) use ($byBucket) {
+            $row = $byBucket->get($ts);
+            if (! $row) {
+                return null;
+            }
+
+            return [
+                'total' => (int) $row->total,
+                'up' => (int) $row->up_count,
+                'down' => (int) $row->down_count,
+                'failed_nodes' => $row->failed_nodes
+                    ? array_values(array_unique(array_filter(explode(',', $row->failed_nodes))))
+                    : [],
+            ];
+        });
+    }
+
+    /**
      * Walk every bucket from periodStart to now, calling the loader for each
      * bucket timestamp and filling missing buckets with an empty placeholder.
      *
@@ -220,27 +297,24 @@ class Show extends Component
     {
         $periodStart = $this->getPeriodStart();
 
-        // Stats from all results in period
-        $statsQuery = $this->monitor->checkResults()
-            ->where('created_at', '>=', $periodStart);
+        [
+            'total' => $totalChecks,
+            'avg' => $avgResponseTime,
+            'min' => $minResponseTime,
+            'max' => $maxResponseTime,
+        ] = $this->getPeriodStats($periodStart);
 
-        $totalChecks = $statsQuery->count();
         $uptimePercentage = $totalChecks > 0
             ? $this->calculateUptimePercentage($periodStart)
             : null;
-
-        $rawAvg = (clone $statsQuery)->where('is_up', true)->avg('response_time_ms');
-        $avgResponseTime = $rawAvg !== null ? (int) round((float) $rawAvg) : null;
-        $minResponseTime = (clone $statsQuery)->where('is_up', true)->min('response_time_ms');
-        $maxResponseTime = (clone $statsQuery)->where('is_up', true)->max('response_time_ms');
 
         // Incidents in the selected period: either started within the window,
         // or started earlier but still ongoing / only recently resolved.
         $incidents = $this->monitor->incidents()
             ->where(function ($q) use ($periodStart) {
                 $q->where('started_at', '>=', $periodStart)
-                  ->orWhereNull('ended_at')
-                  ->orWhere('ended_at', '>=', $periodStart);
+                    ->orWhereNull('ended_at')
+                    ->orWhere('ended_at', '>=', $periodStart);
             })
             ->orderByDesc('started_at')
             ->limit(50)
@@ -266,6 +340,49 @@ class Show extends Component
     }
 
     /**
+     * Check count and response-time stats for the period, from raw results
+     * or (for long periods) the hourly rollup.
+     *
+     * @return array{total: int, avg: ?int, min: ?int, max: ?int}
+     */
+    private function getPeriodStats(\Illuminate\Support\Carbon $periodStart): array
+    {
+        if ($this->usesRollup()) {
+            $row = DB::selectOne('
+                SELECT
+                    COALESCE(SUM(total), 0) AS total,
+                    SUM(response_time_sum_ms)::float / NULLIF(SUM(up_count), 0) AS avg_ms,
+                    MIN(min_response_time_ms) AS min_ms,
+                    MAX(max_response_time_ms) AS max_ms
+                FROM '.CheckResultRollupService::VIEW_NAME.'
+                WHERE monitor_id = ?
+                  AND bucket >= ?
+            ', [$this->monitor->id, $periodStart]);
+
+            return [
+                'total' => (int) $row->total,
+                'avg' => $row->avg_ms !== null ? (int) round((float) $row->avg_ms) : null,
+                'min' => $row->min_ms !== null ? (int) $row->min_ms : null,
+                'max' => $row->max_ms !== null ? (int) $row->max_ms : null,
+            ];
+        }
+
+        $statsQuery = $this->monitor->checkResults()
+            ->where('created_at', '>=', $periodStart);
+
+        $rawAvg = (clone $statsQuery)->where('is_up', true)->avg('response_time_ms');
+        $min = (clone $statsQuery)->where('is_up', true)->min('response_time_ms');
+        $max = (clone $statsQuery)->where('is_up', true)->max('response_time_ms');
+
+        return [
+            'total' => $statsQuery->count(),
+            'avg' => $rawAvg !== null ? (int) round((float) $rawAvg) : null,
+            'min' => $min !== null ? (int) $min : null,
+            'max' => $max !== null ? (int) $max : null,
+        ];
+    }
+
+    /**
      * Uptime % based on real downtime duration (quorum-decided down incidents),
      * not raw probe success rate, so single-probe blips don't affect uptime.
      */
@@ -278,7 +395,7 @@ class Show extends Component
             ->where('severity', Incident::SEVERITY_DOWN)
             ->where(function ($q) use ($periodStart) {
                 $q->whereNull('ended_at')
-                  ->orWhere('ended_at', '>=', $periodStart);
+                    ->orWhere('ended_at', '>=', $periodStart);
             })
             ->get(['started_at', 'ended_at'])
             ->sum(function ($incident) use ($periodStart) {
@@ -301,22 +418,38 @@ class Show extends Component
     private function getNodeStats(\Illuminate\Support\Carbon $periodStart): Collection
     {
         $driver = DB::connection()->getDriverName();
+        $usesRollup = $this->usesRollup();
 
         // Overall per-node aggregates (up-check response times for min/avg/max;
         // total + failures include down checks so the summary is honest).
-        $aggregates = $this->monitor->checkResults()
-            ->where('created_at', '>=', $periodStart)
-            ->selectRaw('
-                node_id,
-                COUNT(*) AS total,
-                SUM(CASE WHEN is_up THEN 0 ELSE 1 END) AS failures,
-                MIN(CASE WHEN is_up THEN response_time_ms END) AS min_ms,
-                AVG(CASE WHEN is_up THEN response_time_ms END) AS avg_ms,
-                MAX(CASE WHEN is_up THEN response_time_ms END) AS max_ms
-            ')
-            ->groupBy('node_id')
-            ->orderBy('node_id')
-            ->get();
+        $aggregates = $usesRollup
+            ? collect(DB::select('
+                SELECT
+                    node_id,
+                    SUM(total) AS total,
+                    SUM(down_count) AS failures,
+                    MIN(min_response_time_ms) AS min_ms,
+                    SUM(response_time_sum_ms)::float / NULLIF(SUM(up_count), 0) AS avg_ms,
+                    MAX(max_response_time_ms) AS max_ms
+                FROM '.CheckResultRollupService::VIEW_NAME.'
+                WHERE monitor_id = ?
+                  AND bucket >= ?
+                GROUP BY node_id
+                ORDER BY node_id
+            ', [$this->monitor->id, $periodStart]))
+            : $this->monitor->checkResults()
+                ->where('created_at', '>=', $periodStart)
+                ->selectRaw('
+                    node_id,
+                    COUNT(*) AS total,
+                    SUM(CASE WHEN is_up THEN 0 ELSE 1 END) AS failures,
+                    MIN(CASE WHEN is_up THEN response_time_ms END) AS min_ms,
+                    AVG(CASE WHEN is_up THEN response_time_ms END) AS avg_ms,
+                    MAX(CASE WHEN is_up THEN response_time_ms END) AS max_ms
+                ')
+                ->groupBy('node_id')
+                ->orderBy('node_id')
+                ->get();
 
         if ($aggregates->isEmpty()) {
             return collect();
@@ -326,11 +459,13 @@ class Show extends Component
         $periodSeconds = max(1, now()->getTimestamp() - $periodStart->getTimestamp());
         $bucketSeconds = (int) max(1, ceil($periodSeconds / $bucketCount));
 
-        $trends = $driver === 'pgsql'
-            ? $this->getNodeTrendsPgsql($periodStart, $bucketSeconds)
-            : $this->getNodeTrendsSqlite($periodStart, $bucketSeconds);
+        $trends = match (true) {
+            $usesRollup => $this->getNodeTrendsRollup($periodStart, $bucketSeconds),
+            $driver === 'pgsql' => $this->getNodeTrendsPgsql($periodStart, $bucketSeconds),
+            default => $this->getNodeTrendsSqlite($periodStart, $bucketSeconds),
+        };
 
-        return $aggregates->map(function ($row) use ($trends, $periodStart, $bucketSeconds, $bucketCount) {
+        return $aggregates->map(function ($row) use ($trends, $bucketCount) {
             $trend = array_fill(0, $bucketCount, null);
             foreach ($trends->get($row->node_id, []) as $bucketIndex => $ms) {
                 if ($bucketIndex >= 0 && $bucketIndex < $bucketCount) {
@@ -371,6 +506,33 @@ class Show extends Component
         return collect($rows)
             ->groupBy('node_id')
             ->map(fn ($nodeRows) => $nodeRows->mapWithKeys(fn ($r) => [(int) $r->bucket => (int) $r->avg_ms])->all());
+    }
+
+    /**
+     * Node trends for long periods, computed from the hourly rollup with a
+     * correctly weighted average (sum divided by up-count, not avg of avgs).
+     *
+     * @return Collection<string, array<int, int>> keyed by node_id, values indexed by bucket
+     */
+    private function getNodeTrendsRollup(\Illuminate\Support\Carbon $periodStart, int $bucketSeconds): Collection
+    {
+        $rows = DB::select('
+            SELECT
+                node_id,
+                FLOOR(EXTRACT(EPOCH FROM (bucket - ?)) / ?)::int AS trend_bucket,
+                ROUND(SUM(response_time_sum_ms)::float / NULLIF(SUM(up_count), 0))::int AS avg_ms
+            FROM '.CheckResultRollupService::VIEW_NAME.'
+            WHERE monitor_id = ?
+              AND bucket >= ?
+              AND up_count > 0
+            GROUP BY node_id, trend_bucket
+            ORDER BY node_id, trend_bucket
+        ', [$periodStart, $bucketSeconds, $this->monitor->id, $periodStart]);
+
+        return collect($rows)
+            ->filter(fn ($r) => $r->avg_ms !== null)
+            ->groupBy('node_id')
+            ->map(fn ($nodeRows) => $nodeRows->mapWithKeys(fn ($r) => [(int) $r->trend_bucket => (int) $r->avg_ms])->all());
     }
 
     /**

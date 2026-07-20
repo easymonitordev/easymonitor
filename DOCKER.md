@@ -162,12 +162,15 @@ Check results are stored in a TimescaleDB hypertable. Two policies keep disk usa
 
 - **Compression** — chunks older than 7 days are compressed (typically 90%+ smaller).
 - **Retention** — raw results older than 90 days are dropped automatically.
+- **Hourly rollup** — an hourly per-monitor/per-node aggregate is kept for 2 years,
+  so long-period charts (90 days, 1 year) keep working after raw data is dropped.
 
-Both are applied by the migrations and configurable in `.env`:
+All are applied by the migrations and configurable in `.env`:
 
 ```bash
-CHECK_RESULT_RETENTION_DAYS=90        # how long to keep raw check results
-CHECK_RESULT_COMPRESS_AFTER_DAYS=7    # compress chunks older than this
+CHECK_RESULT_RETENTION_DAYS=90          # how long to keep raw check results
+CHECK_RESULT_COMPRESS_AFTER_DAYS=7      # compress chunks older than this
+CHECK_RESULT_ROLLUP_RETENTION_DAYS=730  # how long to keep the hourly rollup
 ```
 
 After changing either value, re-apply the policies:
@@ -178,7 +181,9 @@ docker compose exec php php artisan easymonitor:retention
 
 Rough disk expectations before compression: a monitor on a 30-second interval with 3 probes writes about 260k rows per month (roughly 30–40 MB including indexes). With compression and the 90-day default retention, expect well under 100 MB per such monitor at steady state.
 
-Note: uptime history older than the retention window is discarded. Keep `CHECK_RESULT_RETENTION_DAYS` at least as long as the longest uptime period you want to display.
+Note: raw per-check detail older than the retention window is discarded, but hourly
+resolution survives in the rollup for `CHECK_RESULT_ROLLUP_RETENTION_DAYS`. Uptime
+percentages are computed from incidents and are unaffected by retention.
 
 ## Production Deployment
 

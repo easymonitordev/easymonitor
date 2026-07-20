@@ -46,6 +46,7 @@ return [
     'retention' => [
         'days' => (int) env('CHECK_RESULT_RETENTION_DAYS', 90),
         'compress_after_days' => (int) env('CHECK_RESULT_COMPRESS_AFTER_DAYS', 7),
+        'rollup_days' => (int) env('CHECK_RESULT_ROLLUP_RETENTION_DAYS', 730),
     ],
 
 ];

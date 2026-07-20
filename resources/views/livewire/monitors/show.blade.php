@@ -59,7 +59,7 @@
     <!-- Period Selector -->
     <div class="flex gap-2 mb-6">
         <div role="tablist" class="tabs tabs-boxed">
-            @foreach (['1h' => '1 Hour', '24h' => '24 Hours', '7d' => '7 Days', '30d' => '30 Days'] as $value => $label)
+            @foreach (['1h' => '1 Hour', '24h' => '24 Hours', '7d' => '7 Days', '30d' => '30 Days', '90d' => '90 Days', '365d' => '1 Year'] as $value => $label)
                 <a role="tab"
                    class="tab @if($period === $value) tab-active @endif"
                    wire:click="$set('period', '{{ $value }}')">
