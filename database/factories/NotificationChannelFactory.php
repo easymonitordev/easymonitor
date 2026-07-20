@@ -78,6 +78,19 @@ class NotificationChannelFactory extends Factory
         ]);
     }
 
+    public function ntfy(?string $topic = null, ?string $serverUrl = null, ?string $token = null): static
+    {
+        return $this->state(fn () => [
+            'type' => NotificationChannelType::Ntfy,
+            'label' => 'My phone',
+            'config' => array_filter([
+                'server_url' => $serverUrl ?? 'https://ntfy.sh',
+                'topic' => $topic ?? 'easymonitor-testtopic',
+                'token' => $token,
+            ], fn ($value) => $value !== null),
+        ]);
+    }
+
     public function webhook(?string $url = null, ?string $label = null, ?string $secret = null): static
     {
         return $this->state(fn () => [

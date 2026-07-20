@@ -67,6 +67,24 @@ class Notifications extends Component
     public bool $newTelegramActive = true;
 
     /**
+     * Editable in-place state for each existing ntfy channel,
+     * keyed by NotificationChannel id.
+     *
+     * @var array<int, array{label: string, server_url: string, topic: string, token: string, is_active: bool}>
+     */
+    public array $ntfyEdits = [];
+
+    public string $newNtfyLabel = '';
+
+    public string $newNtfyServerUrl = 'https://ntfy.sh';
+
+    public string $newNtfyTopic = '';
+
+    public string $newNtfyToken = '';
+
+    public bool $newNtfyActive = true;
+
+    /**
      * Editable in-place state for each existing Webhook channel,
      * keyed by NotificationChannel id.
      *
@@ -99,6 +117,7 @@ class Notifications extends Component
         $this->refreshSlackEdits();
         $this->refreshDiscordEdits();
         $this->refreshTelegramEdits();
+        $this->refreshNtfyEdits();
         $this->refreshWebhookEdits();
 
         $this->defaultChannelId = $user->notificationChannels()
@@ -371,6 +390,90 @@ class Notifications extends Component
         $this->dispatch('notifications-saved');
     }
 
+    public function addNtfyChannel(): void
+    {
+        $this->validate(
+            [
+                'newNtfyLabel' => ['required', 'string', 'max:50'],
+                'newNtfyServerUrl' => $this->ntfyServerRules(),
+                'newNtfyTopic' => $this->ntfyTopicRules(),
+                'newNtfyToken' => ['nullable', 'string', 'max:200'],
+                'newNtfyActive' => ['boolean'],
+            ],
+            ['newNtfyTopic.regex' => __('Topics may only contain letters, numbers, dashes, and underscores.')],
+        );
+
+        Auth::user()->notificationChannels()->create([
+            'type' => NotificationChannelType::Ntfy,
+            'label' => $this->newNtfyLabel,
+            'config' => array_filter([
+                'server_url' => rtrim($this->newNtfyServerUrl, '/'),
+                'topic' => $this->newNtfyTopic,
+                'token' => $this->newNtfyToken !== '' ? $this->newNtfyToken : null,
+            ], fn ($value) => $value !== null),
+            'is_active' => $this->newNtfyActive,
+            'is_default' => false,
+        ]);
+
+        $this->newNtfyLabel = '';
+        $this->newNtfyServerUrl = 'https://ntfy.sh';
+        $this->newNtfyTopic = '';
+        $this->newNtfyToken = '';
+        $this->newNtfyActive = true;
+
+        $this->refreshNtfyEdits();
+
+        $this->dispatch('notifications-saved');
+    }
+
+    public function saveNtfyChannel(int $channelId): void
+    {
+        $prefix = "ntfyEdits.{$channelId}";
+
+        $this->validate(
+            [
+                "{$prefix}.label" => ['required', 'string', 'max:50'],
+                "{$prefix}.server_url" => $this->ntfyServerRules(),
+                "{$prefix}.topic" => $this->ntfyTopicRules(),
+                "{$prefix}.token" => ['nullable', 'string', 'max:200'],
+                "{$prefix}.is_active" => ['boolean'],
+            ],
+            ["{$prefix}.topic.regex" => __('Topics may only contain letters, numbers, dashes, and underscores.')],
+        );
+
+        $row = $this->ntfyEdits[$channelId];
+
+        $channel = Auth::user()
+            ->notificationChannels()
+            ->where('type', NotificationChannelType::Ntfy->value)
+            ->findOrFail($channelId);
+
+        $channel->update([
+            'label' => $row['label'],
+            'config' => array_filter([
+                'server_url' => rtrim($row['server_url'], '/'),
+                'topic' => $row['topic'],
+                'token' => ($row['token'] ?? '') !== '' ? $row['token'] : null,
+            ], fn ($value) => $value !== null),
+            'is_active' => (bool) ($row['is_active'] ?? true),
+        ]);
+
+        $this->dispatch('notifications-saved');
+    }
+
+    public function deleteNtfyChannel(int $channelId): void
+    {
+        Auth::user()
+            ->notificationChannels()
+            ->where('type', NotificationChannelType::Ntfy->value)
+            ->whereKey($channelId)
+            ->delete();
+
+        unset($this->ntfyEdits[$channelId]);
+
+        $this->dispatch('notifications-saved');
+    }
+
     public function addWebhookChannel(): void
     {
         $this->validate([
@@ -512,6 +615,7 @@ class Notifications extends Component
             'slackChannels' => $channels->where('type', NotificationChannelType::Slack)->values(),
             'discordChannels' => $channels->where('type', NotificationChannelType::Discord)->values(),
             'telegramChannels' => $channels->where('type', NotificationChannelType::Telegram)->values(),
+            'ntfyChannels' => $channels->where('type', NotificationChannelType::Ntfy)->values(),
             'webhookChannels' => $channels->where('type', NotificationChannelType::Webhook)->values(),
         ]);
     }
@@ -608,6 +712,40 @@ class Notifications extends Component
                     'label' => (string) $channel->label,
                     'bot_token' => (string) ($channel->config['bot_token'] ?? ''),
                     'chat_id' => (string) ($channel->config['chat_id'] ?? ''),
+                    'is_active' => (bool) $channel->is_active,
+                ],
+            ])
+            ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function ntfyServerRules(): array
+    {
+        return ['required', 'string', 'url', 'starts_with:https://,http://', 'max:200'];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function ntfyTopicRules(): array
+    {
+        return ['required', 'string', 'max:64', 'regex:/^[A-Za-z0-9_-]+$/'];
+    }
+
+    protected function refreshNtfyEdits(): void
+    {
+        $this->ntfyEdits = Auth::user()
+            ->notificationChannels()
+            ->where('type', NotificationChannelType::Ntfy->value)
+            ->get()
+            ->mapWithKeys(fn (NotificationChannel $channel) => [
+                $channel->id => [
+                    'label' => (string) $channel->label,
+                    'server_url' => (string) ($channel->config['server_url'] ?? 'https://ntfy.sh'),
+                    'topic' => (string) ($channel->config['topic'] ?? ''),
+                    'token' => (string) ($channel->config['token'] ?? ''),
                     'is_active' => (bool) $channel->is_active,
                 ],
             ])

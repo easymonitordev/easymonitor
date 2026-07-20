@@ -416,3 +416,59 @@ test('a telegram channel can be updated and deleted', function () {
 
     expect(NotificationChannel::find($channel->id))->toBeNull();
 });
+
+test('adding an ntfy channel creates a new notification channel', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->set('newNtfyLabel', 'My phone')
+        ->set('newNtfyTopic', 'easymonitor-a1b2c3')
+        ->call('addNtfyChannel')
+        ->assertHasNoErrors();
+
+    $ntfy = $user->notificationChannels()
+        ->where('type', NotificationChannelType::Ntfy->value)
+        ->first();
+
+    expect($ntfy)->not->toBeNull();
+    expect($ntfy->config['topic'])->toBe('easymonitor-a1b2c3');
+    expect($ntfy->config['server_url'])->toBe('https://ntfy.sh');
+    expect($ntfy->config)->not->toHaveKey('token');
+});
+
+test('ntfy validation rejects bad topics and servers', function (string $field, string $value, string $errorField) {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->set('newNtfyLabel', 'Phone')
+        ->set('newNtfyServerUrl', $field === 'server' ? $value : 'https://ntfy.sh')
+        ->set('newNtfyTopic', $field === 'topic' ? $value : 'valid-topic')
+        ->call('addNtfyChannel')
+        ->assertHasErrors($errorField);
+})->with([
+    'topic with spaces' => ['topic', 'not a topic', 'newNtfyTopic'],
+    'topic with slash' => ['topic', 'a/b', 'newNtfyTopic'],
+    'server not a url' => ['server', 'ntfy.sh', 'newNtfyServerUrl'],
+]);
+
+test('an ntfy channel can be updated with a token and deleted', function () {
+    $user = User::factory()->create();
+    $channel = NotificationChannel::factory()->for($user)->ntfy()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->set("ntfyEdits.{$channel->id}.token", 'tk_secret')
+        ->set("ntfyEdits.{$channel->id}.server_url", 'https://ntfy.internal.example.com/')
+        ->call('saveNtfyChannel', $channel->id)
+        ->assertHasNoErrors();
+
+    expect($channel->fresh()->config['token'])->toBe('tk_secret')
+        ->and($channel->fresh()->config['server_url'])->toBe('https://ntfy.internal.example.com');
+
+    Livewire::test(Notifications::class)
+        ->call('deleteNtfyChannel', $channel->id);
+
+    expect(NotificationChannel::find($channel->id))->toBeNull();
+});

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Enums;
 
 use App\Notifications\Channels\DiscordWebhookChannel;
+use App\Notifications\Channels\NtfyChannel;
 use App\Notifications\Channels\SlackWebhookChannel;
 use App\Notifications\Channels\TelegramChannel;
 use App\Notifications\Channels\WebhookChannel;
@@ -17,6 +18,7 @@ enum NotificationChannelType: string
     case Slack = 'slack';
     case Discord = 'discord';
     case Telegram = 'telegram';
+    case Ntfy = 'ntfy';
     case Webhook = 'webhook';
 
     /**
@@ -30,6 +32,7 @@ enum NotificationChannelType: string
             self::Slack => 'Slack',
             self::Discord => 'Discord',
             self::Telegram => 'Telegram',
+            self::Ntfy => 'ntfy',
             self::Webhook => 'Webhook',
         };
     }
@@ -45,6 +48,7 @@ enum NotificationChannelType: string
             self::Slack => SlackWebhookChannel::class,
             self::Discord => DiscordWebhookChannel::class,
             self::Telegram => TelegramChannel::class,
+            self::Ntfy => NtfyChannel::class,
             self::Webhook => WebhookChannel::class,
         };
     }
@@ -59,8 +63,9 @@ enum NotificationChannelType: string
             self::Slack => 1,
             self::Discord => 2,
             self::Telegram => 3,
-            self::Webhook => 4,
-            self::Pushover => 5,
+            self::Ntfy => 4,
+            self::Webhook => 5,
+            self::Pushover => 6,
         };
     }
 }
