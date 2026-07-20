@@ -213,6 +213,11 @@ class StatusPage extends Model
      * (a build-time directive that browsers can't execute), strip the wrapper
      * and metadata, then re-emit the variable definitions under the
      * matching [data-theme="..."] selector.
+     *
+     * Every `<` is emitted as the CSS escape `\3c ` so the value can never
+     * close the surrounding <style> element (stored XSS via `</style><script>`).
+     * Inside CSS strings the escape is equivalent to a literal `<`; outside
+     * strings `<` was never valid CSS anyway.
      */
     public function renderableCustomCss(): string
     {
@@ -242,7 +247,7 @@ class StatusPage extends Model
             $css
         );
 
-        return $css;
+        return str_replace('<', '\\3c ', $css);
     }
 
     public function user(): BelongsTo

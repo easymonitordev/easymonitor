@@ -158,7 +158,16 @@ class Manage extends Component
 
         $validated = $this->validate([
             'theme' => ['required', 'in:'.implode(',', $themes)],
-            'customCss' => ['nullable', 'string', 'max:50000'],
+            'customCss' => [
+                'nullable',
+                'string',
+                'max:50000',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (preg_match('/<\s*[a-z!\/?]/i', (string) $value)) {
+                        $fail(__('Custom CSS must not contain HTML markup.'));
+                    }
+                },
+            ],
             'logo' => ['nullable', 'image', 'mimes:png,jpg,jpeg,svg,webp', 'max:2048'], // 2MB
         ]);
 
