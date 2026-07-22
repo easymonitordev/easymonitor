@@ -167,6 +167,12 @@ if $UPGRADE; then
     docker compose exec -T php php artisan easymonitor:retention --no-interaction \
         || warn "Could not apply retention policy — run 'docker compose exec php php artisan easymonitor:retention' manually."
 
+    # The php container is only recreated when its image changes; code is
+    # bind-mounted, so long-running workers must be told to reload it.
+    info "Restarting queue workers so they pick up the new code..."
+    docker compose exec -T php php artisan horizon:terminate >/dev/null 2>&1 \
+        || warn "Could not restart Horizon — run 'docker compose exec php php artisan horizon:terminate' manually."
+
     info "Restarting probe..."
     docker compose up -d --force-recreate probe >/dev/null 2>&1 || true
 

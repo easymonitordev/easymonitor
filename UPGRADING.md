@@ -42,6 +42,18 @@ they do not understand, so updating the server first is safe.
 
 ## Version-specific notes
 
+### v0.2.1
+
+- **The Laravel scheduler now runs inside the php container.** Previous
+  Docker installs had no scheduler process, so scheduled background tasks
+  never ran: the update-available banner, the queue-health watchdog,
+  certificate expiry alerts (v0.2.0), and Horizon metric snapshots. Upgrading
+  fixes this automatically — the rebuilt image starts a `schedule:work`
+  process under supervisord. No manual steps are required.
+- `./setup.sh --upgrade` now gracefully restarts Horizon after deploying new
+  code, so queue workers no longer keep running the previous release when
+  the container itself is not recreated.
+
 ### v0.2.0
 
 - **Update remote probes when upgrading the server.** TCP checks are new in
