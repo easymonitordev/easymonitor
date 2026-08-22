@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\AssertionType;
 use App\Enums\CheckType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -27,6 +28,8 @@ class Monitor extends Model
         'name',
         'url',
         'check_type',
+        'assertion_type',
+        'assertion_value',
         'is_active',
         'status',
         'check_interval',
@@ -54,7 +57,20 @@ class Monitor extends Model
             'next_run_at' => 'datetime',
             'cert_expires_at' => 'datetime',
             'check_type' => CheckType::class,
+            'assertion_type' => AssertionType::class,
         ];
+    }
+
+    /**
+     * Whether a response-body assertion is configured on this monitor.
+     */
+    public function hasAssertion(): bool
+    {
+        return $this->check_type === CheckType::Http
+            && $this->assertion_type !== null
+            && $this->assertion_type !== AssertionType::None
+            && $this->assertion_value !== null
+            && $this->assertion_value !== '';
     }
 
     /**

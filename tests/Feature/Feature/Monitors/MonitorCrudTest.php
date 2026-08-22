@@ -402,3 +402,111 @@ test('switching a monitor from tcp to http requires a url', function () {
         ->call('save')
         ->assertHasErrors('url');
 });
+
+test('user can create a monitor with a keyword assertion', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user);
+
+    Livewire::test(Create::class)
+        ->set('name', 'Health endpoint')
+        ->set('url', 'https://example.com/health')
+        ->set('assertionType', 'keyword_present')
+        ->set('assertionValue', 'healthy')
+        ->call('save')
+        ->assertRedirect(route('monitors.index'));
+
+    $this->assertDatabaseHas('monitors', [
+        'user_id' => $user->id,
+        'name' => 'Health endpoint',
+        'assertion_type' => 'keyword_present',
+        'assertion_value' => 'healthy',
+    ]);
+});
+
+test('assertion keyword is required when an assertion type is selected', function (string $assertionType) {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Create::class)
+        ->set('name', 'Missing keyword')
+        ->set('url', 'https://example.com')
+        ->set('assertionType', $assertionType)
+        ->set('assertionValue', '')
+        ->call('save')
+        ->assertHasErrors('assertionValue');
+})->with([
+    'keyword present' => ['keyword_present'],
+    'keyword absent' => ['keyword_absent'],
+]);
+
+test('invalid assertion types are rejected', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Create::class)
+        ->set('name', 'Bad assertion')
+        ->set('url', 'https://example.com')
+        ->set('assertionType', 'json_path')
+        ->set('assertionValue', '$.status')
+        ->call('save')
+        ->assertHasErrors('assertionType');
+});
+
+test('editing a monitor populates its assertion fields', function () {
+    $user = User::factory()->create();
+    $monitor = Monitor::factory()->withKeywordAssertion('Fatal error', mustBePresent: false)->create([
+        'user_id' => $user->id,
+        'url' => 'https://example.com',
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Edit::class, ['monitor' => $monitor])
+        ->assertSet('assertionType', 'keyword_absent')
+        ->assertSet('assertionValue', 'Fatal error')
+        ->set('assertionValue', 'Fatal Error')
+        ->call('save')
+        ->assertRedirect(route('monitors.show', $monitor));
+
+    expect($monitor->fresh()->assertion_value)->toBe('Fatal Error');
+});
+
+test('selecting no assertion clears the stored keyword', function () {
+    $user = User::factory()->create();
+    $monitor = Monitor::factory()->withKeywordAssertion('healthy')->create([
+        'user_id' => $user->id,
+        'url' => 'https://example.com',
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Edit::class, ['monitor' => $monitor])
+        ->set('assertionType', 'none')
+        ->call('save')
+        ->assertRedirect(route('monitors.show', $monitor));
+
+    $fresh = $monitor->fresh();
+    expect($fresh->assertion_type)->toBe(\App\Enums\AssertionType::None)
+        ->and($fresh->assertion_value)->toBeNull();
+});
+
+test('switching a monitor with an assertion to a non-http type clears the assertion', function () {
+    $user = User::factory()->create();
+    $monitor = Monitor::factory()->withKeywordAssertion('healthy')->create([
+        'user_id' => $user->id,
+        'url' => 'https://example.com',
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Edit::class, ['monitor' => $monitor])
+        ->set('checkType', 'icmp')
+        ->set('url', 'example.com')
+        ->call('save')
+        ->assertRedirect(route('monitors.show', $monitor));
+
+    $fresh = $monitor->fresh();
+    expect($fresh->assertion_type)->toBe(\App\Enums\AssertionType::None)
+        ->and($fresh->assertion_value)->toBeNull();
+});

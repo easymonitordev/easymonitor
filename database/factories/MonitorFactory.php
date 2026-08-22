@@ -78,6 +78,19 @@ class MonitorFactory extends Factory
     }
 
     /**
+     * Indicate that the monitor has a keyword assertion on the response body
+     */
+    public function withKeywordAssertion(string $keyword = 'OK', bool $mustBePresent = true): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'assertion_type' => $mustBePresent
+                ? \App\Enums\AssertionType::KeywordPresent
+                : \App\Enums\AssertionType::KeywordAbsent,
+            'assertion_value' => $keyword,
+        ]);
+    }
+
+    /**
      * Indicate that the monitor is an ICMP/ping check
      */
     public function icmp(): static

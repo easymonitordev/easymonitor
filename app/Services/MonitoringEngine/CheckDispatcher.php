@@ -80,17 +80,27 @@ class CheckDispatcher
         $checkType = $monitor->check_type ?? CheckType::Http;
         $url = $checkType->dispatchPrefix().$monitor->url;
 
+        $fields = [
+            'check_id' => (string) $monitor->id,
+            'url' => $url,
+            'timeout' => (string) ($monitor->check_interval * 1000), // milliseconds
+            'round_id' => $roundId,
+            'check_type' => $checkType->value,
+        ];
+
+        // Assertion fields are only sent when configured. Probes without
+        // assertion support ignore unknown fields, so their results simply
+        // lack assertion evaluation instead of failing.
+        if ($monitor->hasAssertion()) {
+            $fields['assertion_type'] = $monitor->assertion_type->value;
+            $fields['assertion_value'] = $monitor->assertion_value;
+        }
+
         // XADD checks * check_id=42 url=... timeout=... round_id=... check_type=...
         $entryId = Redis::connection('streams')->xadd(
             self::STREAM_CHECKS,
             '*', // Auto-generate ID
-            [
-                'check_id' => (string) $monitor->id,
-                'url' => $url,
-                'timeout' => (string) ($monitor->check_interval * 1000), // milliseconds
-                'round_id' => $roundId,
-                'check_type' => $checkType->value,
-            ]
+            $fields
         );
 
         return $entryId;

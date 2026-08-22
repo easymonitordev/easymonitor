@@ -4,12 +4,32 @@ import "time"
 
 // CheckJob represents a monitoring check job from the Redis stream
 type CheckJob struct {
-	ID        string // Stream entry ID
-	CheckID   int64
-	URL       string
-	Timeout   int    // Timeout in milliseconds
-	RoundID   string // Groups results from all probes for the same dispatched check
-	CheckType string // Explicit check type ("http", "icmp", "tcp"); empty on jobs from pre-v0.2.0 servers
+	ID             string // Stream entry ID
+	CheckID        int64
+	URL            string
+	Timeout        int    // Timeout in milliseconds
+	RoundID        string // Groups results from all probes for the same dispatched check
+	CheckType      string // Explicit check type ("http", "icmp", "tcp"); empty on jobs from pre-v0.2.0 servers
+	AssertionType  string // Optional response-body assertion ("keyword_present", "keyword_absent"); empty = none
+	AssertionValue string // The keyword the assertion looks for
+}
+
+// Assertion types the probe knows how to evaluate. The server only sends
+// assertion fields when an assertion is configured on the monitor.
+const (
+	AssertionKeywordPresent = "keyword_present"
+	AssertionKeywordAbsent  = "keyword_absent"
+)
+
+// KnownAssertionType reports whether this probe can evaluate the given
+// assertion type. The empty string (no assertion) is always known.
+func KnownAssertionType(assertionType string) bool {
+	switch assertionType {
+	case "", "none", AssertionKeywordPresent, AssertionKeywordAbsent:
+		return true
+	default:
+		return false
+	}
 }
 
 // CheckResult represents the result of a monitoring check
