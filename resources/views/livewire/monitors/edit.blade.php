@@ -121,6 +121,36 @@
                         @enderror
                     </div>
                 @endif
+
+                @if ($checkType === 'http')
+                    <div class="form-control">
+                        <label class="label pb-1">
+                            <span class="label-text font-medium">{{ __('Response Assertion') }}</span>
+                            <span class="label-text-alt text-base-content/50">{{ __('Optional') }}</span>
+                        </label>
+                        <select wire:model.live="assertionType" class="select select-bordered w-full rounded-lg @error('assertionType') select-error @enderror">
+                            @foreach (\App\Enums\AssertionType::cases() as $assertion)
+                                <option value="{{ $assertion->value }}">{{ __($assertion->label()) }}</option>
+                            @endforeach
+                        </select>
+                        @if ($assertionType !== 'none')
+                            <input
+                                type="text"
+                                wire:model="assertionValue"
+                                class="input input-bordered w-full rounded-lg mt-2 @error('assertionValue') input-error @enderror"
+                                placeholder="{{ __('Keyword or phrase') }}"
+                            />
+                            @error('assertionValue')
+                                <div class="label pb-0">
+                                    <span class="label-text-alt text-error">{{ $message }}</span>
+                                </div>
+                            @enderror
+                        @endif
+                        <div class="label pb-0">
+                            <span class="label-text-alt text-base-content/50">{{ __('Case-sensitive match against the first 1 MB of the response body. Probes without assertion support evaluate only the status code until upgraded.') }}</span>
+                        </div>
+                    </div>
+                @endif
             </div>
         </div>
 

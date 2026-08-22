@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -13,6 +14,10 @@ import (
 
 	"github.com/easymonitordev/probe-node/pkg/types"
 )
+
+// maxAssertionBodyBytes caps how much of the response body is read when a
+// keyword assertion is configured, so huge responses can't exhaust memory.
+const maxAssertionBodyBytes = 1 << 20 // 1 MB
 
 // HTTPChecker performs HTTP/HTTPS checks
 type HTTPChecker struct {
@@ -42,8 +47,10 @@ func NewHTTPChecker() *HTTPChecker {
 	}
 }
 
-// Check performs an HTTP check on the given URL
-func (h *HTTPChecker) Check(checkID int64, nodeID, url string, timeout time.Duration) *types.CheckResult {
+// Check performs an HTTP check on the given URL. When assertionType is
+// non-empty, the response body is matched against assertionValue after a
+// successful status check.
+func (h *HTTPChecker) Check(checkID int64, nodeID, url string, timeout time.Duration, assertionType, assertionValue string) *types.CheckResult {
 	result := &types.CheckResult{
 		CheckID: checkID,
 		NodeID:  nodeID,
@@ -96,7 +103,41 @@ func (h *HTTPChecker) Check(checkID int64, nodeID, url string, timeout time.Dura
 		result.Error = fmt.Sprintf("HTTP %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 
+	// Evaluate the body assertion only when the status check passed — a
+	// status failure is already the more useful error message.
+	if result.OK && assertionType != "" && assertionType != "none" {
+		if ok, errMsg := evaluateBodyAssertion(resp.Body, assertionType, assertionValue); !ok {
+			result.OK = false
+			result.Error = errMsg
+		}
+	}
+
 	return result
+}
+
+// evaluateBodyAssertion reads up to maxAssertionBodyBytes of the response
+// body and checks the keyword assertion against it. Returns pass/fail plus
+// a human-readable failure reason.
+func evaluateBodyAssertion(body io.Reader, assertionType, keyword string) (bool, string) {
+	data, err := io.ReadAll(io.LimitReader(body, maxAssertionBodyBytes))
+	if err != nil {
+		return false, fmt.Sprintf("Failed to read response body: %v", err)
+	}
+
+	found := strings.Contains(string(data), keyword)
+
+	switch assertionType {
+	case types.AssertionKeywordPresent:
+		if !found {
+			return false, fmt.Sprintf("Keyword %q not found in response body", keyword)
+		}
+	case types.AssertionKeywordAbsent:
+		if found {
+			return false, fmt.Sprintf("Keyword %q found in response body", keyword)
+		}
+	}
+
+	return true, ""
 }
 
 // humanizeHTTPError turns a raw Go HTTP error into a short, readable message

@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Monitors;
 
+use App\Enums\AssertionType;
 use App\Enums\CheckType;
 use App\Models\Monitor;
 use App\Models\Project;
@@ -27,6 +28,10 @@ class Edit extends Component
     public string $tcpHost = '';
 
     public ?int $tcpPort = null;
+
+    public string $assertionType = 'none';
+
+    public string $assertionValue = '';
 
     public int $checkInterval = 60;
 
@@ -56,6 +61,9 @@ class Edit extends Component
             ['host' => $this->tcpHost, 'port' => $this->tcpPort] = MonitorTargetRules::splitHostPort($monitor->url);
         }
 
+        $this->assertionType = $monitor->assertion_type?->value ?? AssertionType::None->value;
+        $this->assertionValue = $monitor->assertion_value ?? '';
+
         $this->checkInterval = $monitor->check_interval;
         $this->isActive = $monitor->is_active;
         $this->failureThreshold = $monitor->failure_threshold ?? 1;
@@ -76,6 +84,10 @@ class Edit extends Component
             'name' => ['required', 'string', 'max:255'],
             'checkType' => ['required', Rule::in(CheckType::values())],
             ...MonitorTargetRules::for($this->checkType),
+            'assertionType' => ['required', Rule::in(AssertionType::values())],
+            'assertionValue' => $this->requiresAssertionValue()
+                ? ['required', 'string', 'max:255']
+                : ['nullable', 'string', 'max:255'],
             'checkInterval' => ['required', 'integer', 'min:30', 'max:3600'],
             'isActive' => ['boolean'],
             'failureThreshold' => ['required', 'integer', 'min:1', 'max:10'],
@@ -91,7 +103,19 @@ class Edit extends Component
      */
     public function messages(): array
     {
-        return MonitorTargetRules::messages();
+        return [
+            ...MonitorTargetRules::messages(),
+            'assertionValue.required' => __('Enter the keyword to look for in the response body.'),
+        ];
+    }
+
+    /**
+     * Whether the current form state needs a non-empty assertion keyword
+     */
+    private function requiresAssertionValue(): bool
+    {
+        return $this->checkType === CheckType::Http->value
+            && $this->assertionType !== AssertionType::None->value;
     }
 
     /**
@@ -121,6 +145,8 @@ class Edit extends Component
             'name' => $validated['name'],
             'check_type' => $validated['checkType'],
             'url' => $validated['url'],
+            'assertion_type' => $this->requiresAssertionValue() ? $validated['assertionType'] : AssertionType::None->value,
+            'assertion_value' => $this->requiresAssertionValue() ? $validated['assertionValue'] : null,
             'check_interval' => $validated['checkInterval'],
             'is_active' => $validated['isActive'],
             'failure_threshold' => $validated['failureThreshold'],

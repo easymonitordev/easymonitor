@@ -116,9 +116,13 @@ The probe exposes several health check endpoints:
 #### Input Stream: `checks`
 
 ```
-check_id: 42              # Monitor ID
-url: https://example.com  # URL to check
-timeout: 30000            # Timeout in milliseconds
+check_id: 42                    # Monitor ID
+url: https://example.com        # URL to check (icmp://host or tcp://host:port for other types)
+timeout: 30000                  # Timeout in milliseconds
+round_id: <uuid>                # Groups results from all probes for the same dispatched check
+check_type: http                # "http", "icmp" or "tcp"; probes skip types they don't understand
+assertion_type: keyword_present # Optional body assertion: "keyword_present" or "keyword_absent"
+assertion_value: "healthy"      # Keyword the assertion looks for (only sent with assertion_type)
 ```
 
 #### Output Stream: `results`
@@ -128,8 +132,11 @@ check_id: 42                    # Monitor ID
 node: production-probe-1        # Probe node ID
 ok: 1                           # 1 = up, 0 = down
 ms: 123                         # Response time in ms
+round_id: <uuid>                # Echoed from the job for quorum grouping
 status_code: 200                # HTTP status code (optional)
 error: "connection timeout"     # Error message (optional)
+cert_expires_at: 1760000000     # TLS certificate NotAfter, unix seconds (optional)
+cert_issuer: "Let's Encrypt"    # TLS certificate issuer (optional)
 ```
 
 ## Development

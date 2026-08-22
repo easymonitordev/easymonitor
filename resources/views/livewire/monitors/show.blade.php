@@ -38,6 +38,11 @@
                 @endif
             </div>
             <p class="text-sm text-base-content/70 mt-1 ml-12">{{ $monitor->url }}</p>
+            @if ($monitor->hasAssertion())
+                <p class="text-sm mt-0.5 ml-12 text-base-content/50">
+                    {{ __('Assertion') }}: {{ $monitor->assertion_type->summary($monitor->assertion_value) }}
+                </p>
+            @endif
             @if ($monitor->certDaysRemaining() !== null)
                 <p class="text-sm mt-0.5 ml-12 {{ $monitor->certDaysRemaining() <= 14 ? 'text-warning font-medium' : 'text-base-content/50' }}">
                     @if ($monitor->certDaysRemaining() < 0)

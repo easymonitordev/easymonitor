@@ -18,7 +18,7 @@ func TestHTTPChecker_Check_CapturesCertificateExpiry(t *testing.T) {
 	// The test server uses a self-signed certificate, so use its trusting
 	// client transport instead of the default verifying one.
 	checker := &HTTPChecker{client: server.Client()}
-	result := checker.Check(1, "test-node", server.URL, 5*time.Second)
+	result := checker.Check(1, "test-node", server.URL, 5*time.Second, "", "")
 
 	assert.True(t, result.OK)
 	assert.Greater(t, result.CertExpiresAt, time.Now().Unix())
@@ -31,7 +31,7 @@ func TestHTTPChecker_Check_NoCertificateForPlainHTTP(t *testing.T) {
 	defer server.Close()
 
 	checker := NewHTTPChecker()
-	result := checker.Check(2, "test-node", server.URL, 5*time.Second)
+	result := checker.Check(2, "test-node", server.URL, 5*time.Second, "", "")
 
 	assert.True(t, result.OK)
 	assert.Equal(t, int64(0), result.CertExpiresAt)

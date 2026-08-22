@@ -63,3 +63,34 @@ test('every dispatched check carries an explicit check_type field', function (ca
     'icmp' => [fn () => Monitor::factory()->icmp()->create(), 'icmp'],
     'tcp' => [fn () => Monitor::factory()->tcp()->create(), 'tcp'],
 ]);
+
+test('http monitors with a keyword assertion carry assertion fields', function () {
+    $monitor = Monitor::factory()->withKeywordAssertion('healthy')->create([
+        'check_type' => CheckType::Http,
+        'url' => 'https://example.com/health',
+    ]);
+
+    (new CheckDispatcher)->dispatchCheck($monitor);
+
+    expect($this->captured['assertion_type'])->toBe('keyword_present')
+        ->and($this->captured['assertion_value'])->toBe('healthy');
+});
+
+test('monitors without an assertion omit assertion fields entirely', function () {
+    $monitor = Monitor::factory()->create([
+        'check_type' => CheckType::Http,
+        'url' => 'https://example.com',
+    ]);
+
+    (new CheckDispatcher)->dispatchCheck($monitor);
+
+    expect($this->captured)->not->toHaveKeys(['assertion_type', 'assertion_value']);
+});
+
+test('non-http monitors omit assertion fields even when columns are set', function () {
+    $monitor = Monitor::factory()->tcp()->withKeywordAssertion('healthy')->create();
+
+    (new CheckDispatcher)->dispatchCheck($monitor);
+
+    expect($this->captured)->not->toHaveKeys(['assertion_type', 'assertion_value']);
+});

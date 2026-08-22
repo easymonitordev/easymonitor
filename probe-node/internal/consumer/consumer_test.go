@@ -43,4 +43,25 @@ func TestParseCheckJob_WithoutCheckType(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "", job.CheckType)
 	assert.Equal(t, 30000, job.Timeout)
+	assert.Equal(t, "", job.AssertionType)
+	assert.Equal(t, "", job.AssertionValue)
+}
+
+func TestParseCheckJob_WithAssertion(t *testing.T) {
+	c := &Consumer{}
+
+	job, err := c.parseCheckJob(redis.XMessage{
+		ID: "1-0",
+		Values: map[string]interface{}{
+			"check_id":        "42",
+			"url":             "https://example.com/health",
+			"check_type":      "http",
+			"assertion_type":  "keyword_present",
+			"assertion_value": "healthy",
+		},
+	})
+
+	assert.NoError(t, err)
+	assert.Equal(t, "keyword_present", job.AssertionType)
+	assert.Equal(t, "healthy", job.AssertionValue)
 }

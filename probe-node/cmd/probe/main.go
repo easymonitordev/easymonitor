@@ -194,7 +194,15 @@ func createCheckHandler(
 			hostPort := strings.TrimPrefix(job.URL, "tcp://")
 			result = tcpChecker.Check(job.CheckID, cfg.NodeID, hostPort, timeout)
 		case "http":
-			result = httpChecker.Check(job.CheckID, cfg.NodeID, job.URL, timeout)
+			// An assertion type this probe doesn't understand (newer server)
+			// must not be silently skipped — that would report "up" for a
+			// monitor whose assertion was never evaluated. Skip publishing,
+			// same as unknown check types.
+			if !types.KnownAssertionType(job.AssertionType) {
+				log.Printf("Skipping check_id=%d: unknown assertion type %q — probe update required", job.CheckID, job.AssertionType)
+				return nil
+			}
+			result = httpChecker.Check(job.CheckID, cfg.NodeID, job.URL, timeout, job.AssertionType, job.AssertionValue)
 		default:
 			// A check type this probe doesn't understand (newer server).
 			// Skip without publishing: a missing result must not become a
