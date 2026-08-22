@@ -42,6 +42,16 @@ they do not understand, so updating the server first is safe.
 
 ## Version-specific notes
 
+### v0.3.0
+
+- **Update remote probes to v0.3.0 to get keyword assertions.** Assertions
+  are evaluated in the probe. Older probes keep working and keep reporting
+  up/down normally — they simply ignore the assertion and evaluate only the
+  status code, so a monitor's keyword assertion has no effect until every
+  probe checking it is updated. The bundled local probe is rebuilt
+  automatically by `./setup.sh --upgrade`; remote probe hosts can use the
+  probe repo's `upgrade.sh` or pull and restart manually.
+
 ### v0.2.1
 
 - **The Laravel scheduler now runs inside the php container.** Previous
