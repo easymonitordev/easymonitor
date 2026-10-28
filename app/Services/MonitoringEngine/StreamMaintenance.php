@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\MonitoringEngine;
 
+use App\Jobs\MonitoringEngine\ProcessMonitorResults;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Redis;
 
 /**
@@ -22,6 +24,11 @@ class StreamMaintenance
      * @var list<string>
      */
     public const STREAMS = ['checks', 'results'];
+
+    /**
+     * Above this many consumers the group is recreated instead of listed
+     */
+    private const MAX_CONSUMERS_TO_LIST = 1000;
 
     /**
      * Trim every monitoring stream to roughly the configured maximum length
@@ -56,11 +63,24 @@ class StreamMaintenance
      *
      * Consumers are registered implicitly on their first XREADGROUP and are
      * never removed by Redis, so every worker that ever ran stays listed.
+     * Before v0.3.1 each worker process registered its own consumer, which
+     * left installs with millions of them; listing those would exhaust PHP's
+     * memory, so an oversized group is recreated instead.
      *
      * @return int Number of consumers deleted
      */
     public function pruneIdleResultConsumers(): int
     {
+        $group = $this->resultConsumerGroup();
+
+        if ($group === null) {
+            return 0;
+        }
+
+        if ((int) $group['consumers'] > self::MAX_CONSUMERS_TO_LIST) {
+            return $this->recreateResultConsumerGroup($group);
+        }
+
         $idleThresholdMs = (int) config('easymonitor.streams.consumer_idle_minutes') * 60 * 1000;
 
         $consumers = Redis::connection('streams')->xinfo('CONSUMERS', ResultConsumer::STREAM_RESULTS, ResultConsumer::CONSUMER_GROUP);
@@ -81,5 +101,50 @@ class StreamMaintenance
         }
 
         return $deleted;
+    }
+
+    /**
+     * The result-processors group as reported by XINFO GROUPS, or null when
+     * the results stream or group does not exist yet
+     *
+     * @return array{name: string, consumers: int, last-delivered-id: string}|null
+     */
+    private function resultConsumerGroup(): ?array
+    {
+        $groups = Redis::connection('streams')->xinfo('GROUPS', ResultConsumer::STREAM_RESULTS);
+
+        if (! is_array($groups)) {
+            return null;
+        }
+
+        foreach ($groups as $group) {
+            if (($group['name'] ?? null) === ResultConsumer::CONSUMER_GROUP) {
+                return $group;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Drop the group with all its consumers and recreate it at the position
+     * it had reached, so no unread result is skipped or read twice
+     *
+     * Holds the result processor's lock so ProcessMonitorResults cannot
+     * recreate the group from the start of the stream in between.
+     *
+     * @param  array{name: string, consumers: int, last-delivered-id: string}  $group
+     * @return int Number of consumers deleted
+     */
+    private function recreateResultConsumerGroup(array $group): int
+    {
+        return Cache::lock(ProcessMonitorResults::LOCK_KEY, 30)->block(30, function () use ($group): int {
+            $redis = Redis::connection('streams');
+
+            $redis->xgroup('DESTROY', ResultConsumer::STREAM_RESULTS, ResultConsumer::CONSUMER_GROUP);
+            $redis->xgroup('CREATE', ResultConsumer::STREAM_RESULTS, ResultConsumer::CONSUMER_GROUP, (string) $group['last-delivered-id']);
+
+            return (int) $group['consumers'];
+        });
     }
 }
