@@ -28,15 +28,20 @@ class ResultConsumer
     /**
      * The Redis stream name for check results
      */
-    private const STREAM_RESULTS = 'results';
+    public const STREAM_RESULTS = 'results';
 
     /**
      * The consumer group name for result processors
      */
-    private const CONSUMER_GROUP = 'result-processors';
+    public const CONSUMER_GROUP = 'result-processors';
 
     /**
-     * The consumer name (unique per worker)
+     * The consumer name (stable per host)
+     *
+     * Not per process: Horizon's auto-balancing constantly spawns new worker
+     * processes, and each new name would register another consumer in the
+     * group that Redis never removes. ProcessMonitorResults holds a lock, so
+     * only one process reads under this name at a time.
      */
     private string $consumerName;
 
@@ -45,7 +50,7 @@ class ResultConsumer
      */
     public function __construct()
     {
-        $this->consumerName = 'worker-'.gethostname().'-'.getmypid();
+        $this->consumerName = 'worker-'.gethostname();
     }
 
     /**

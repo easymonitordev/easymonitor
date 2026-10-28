@@ -39,7 +39,14 @@ services:
             REDIS_HOST: redis
             REDIS_PASSWORD: ${REDIS_PASSWORD:-}
         networks: [app]
-        depends_on: [db, redis]
+        depends_on:
+            db:
+                condition: service_started
+            redis:
+                condition: service_healthy
+        # Give Horizon time to finish in-flight jobs and deregister itself
+        # from Redis (supervisord stopwaitsecs=60) before Docker kills it.
+        stop_grace_period: 75s
 
     # ────────────────────────── data layer ─────────────────────────
     db:
@@ -78,6 +85,16 @@ services:
         volumes:
             - redis_data:/data
         networks: [app]
+        # Healthy only once the dataset is loaded: while loading, PING
+        # answers "LOADING ..." instead of PONG.
+        healthcheck:
+            test:
+                - CMD-SHELL
+                - '[ -n "$$REDIS_PASSWORD" ] && export REDISCLI_AUTH="$$REDIS_PASSWORD"; redis-cli ping | grep -q PONG'
+            interval: 5s
+            timeout: 3s
+            retries: 30
+            start_period: 10s
 
     # ──────────────────────────── probe node ───────────────────────────
     # The probe node is enabled by default for immediate monitoring capability.
@@ -95,7 +112,8 @@ services:
             MAX_CONCURRENCY: 10
             HEALTH_CHECK_PORT: 8080
         depends_on:
-            - redis
+            redis:
+                condition: service_healthy
         networks: [app]
         restart: unless-stopped
         healthcheck:

@@ -42,6 +42,27 @@ they do not understand, so updating the server first is safe.
 
 ## Version-specific notes
 
+### Unreleased
+
+- **Redis memory is now bounded.** The `checks` and `results` streams were
+  never trimmed and could grow to gigabytes. Redis then takes long enough to
+  load on restart that Horizon fails to start and supervisord gives up,
+  which stops all monitoring. An hourly `easymonitor:prune-streams` task now
+  trims both streams (`EASYMONITOR_STREAM_MAX_LENGTH`, default 10000) and
+  removes idle result consumers. The first hourly run frees the existing
+  backlog; to free it right away, run
+  `docker compose exec php php artisan easymonitor:prune-streams`.
+- Horizon now retries for about three and a half minutes when Redis is not
+  ready yet, and the php and probe containers wait for Redis to finish
+  loading on `docker compose up`.
+- The queue-health watchdog now runs inside the scheduler instead of on the
+  queue, so it can alert you when Horizon itself is down.
+- **Switch to daily log rotation.** New installs default to
+  `LOG_STACK=daily` (14 days kept, set with `LOG_DAILY_DAYS`). Existing
+  `.env` files keep `LOG_STACK=single`, where `storage/logs/laravel.log`
+  grows forever. Change it to `daily` and delete the old `laravel.log`.
+  `horizon.log` and `scheduler.log` are now capped at 10 MB × 5 files.
+
 ### v0.3.0
 
 - **Update remote probes to v0.3.0 to get keyword assertions.** Assertions
