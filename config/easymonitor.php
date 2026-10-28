@@ -64,4 +64,21 @@ return [
         'rollup_days' => (int) env('CHECK_RESULT_ROLLUP_RETENTION_DAYS', 730),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Redis Stream Maintenance
+    |--------------------------------------------------------------------------
+    |
+    | The "checks" and "results" streams are trimmed hourly to roughly
+    | "max_length" entries. Processed results are already stored in the
+    | database, so older stream entries are only dead weight. Result
+    | consumers idle longer than "consumer_idle_minutes" are removed.
+    |
+    */
+
+    'streams' => [
+        'max_length' => (int) env('EASYMONITOR_STREAM_MAX_LENGTH', 10000),
+        'consumer_idle_minutes' => (int) env('EASYMONITOR_STREAM_CONSUMER_IDLE_MINUTES', 60),
+    ],
+
 ];
