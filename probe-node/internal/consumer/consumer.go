@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -104,8 +105,23 @@ func (c *Consumer) consumeBatch(ctx context.Context, handler func(*types.CheckJo
 		return fmt.Errorf("xreadgroup failed: %w", err)
 	}
 
+	// Redis's own clock, so the age check is immune to skew between the
+	// probe host and the Redis host that stamped the entry IDs.
+	now, err := c.client.Time(ctx).Result()
+	if err != nil {
+		now = time.Now()
+	}
+
+	skipped := 0
+
 	for _, stream := range streams {
 		for _, message := range stream.Messages {
+			if isStale(message.ID, now, c.cfg.MaxCheckAge) {
+				c.acknowledge(ctx, message.ID)
+				skipped++
+				continue
+			}
+
 			job, err := c.parseCheckJob(message)
 			if err != nil {
 				log.Printf("Failed to parse check job %s: %v", message.ID, err)
@@ -128,7 +144,32 @@ func (c *Consumer) consumeBatch(ctx context.Context, handler func(*types.CheckJo
 		}
 	}
 
+	if skipped > 0 {
+		log.Printf("Skipped %d stale check(s) older than %s", skipped, c.cfg.MaxCheckAge)
+	}
+
 	return nil
+}
+
+// isStale reports whether a stream entry is older than maxAge. Entry IDs
+// start with the millisecond timestamp at which Redis added the entry, i.e.
+// when the server dispatched the check. A maxAge of zero disables the check.
+func isStale(entryID string, now time.Time, maxAge time.Duration) bool {
+	if maxAge <= 0 {
+		return false
+	}
+
+	millis, _, found := strings.Cut(entryID, "-")
+	if !found {
+		return false
+	}
+
+	ms, err := strconv.ParseInt(millis, 10, 64)
+	if err != nil {
+		return false
+	}
+
+	return now.Sub(time.UnixMilli(ms)) > maxAge
 }
 
 // parseCheckJob converts a Redis stream message to a CheckJob
