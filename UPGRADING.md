@@ -42,7 +42,23 @@ they do not understand, so updating the server first is safe.
 
 ## Version-specific notes
 
-### v0.3.1
+### v0.3.2
+
+- **Update remote probes to v0.3.2.** A probe that fell behind while running
+  kept working through old checks and reported their results against rounds
+  dispatched long ago; one production probe was nearly 17 days behind. From
+  v0.3.2, probes skip checks older than `MAX_CHECK_AGE` (default `2m`)
+  instead. The bundled local probe is rebuilt automatically by
+  `./setup.sh --upgrade`; remote probe hosts can use the probe repo's
+  `upgrade.sh` or pull and restart manually. Older probes keep working.
+- **Duplicate monitoring loops are cleaned up automatically.** The check
+  dispatcher and result processor are self-requeuing jobs, and every extra
+  dispatch used to leave one more copy running forever. Now only one copy of
+  each survives, and leftover copies stop on their next run after upgrading.
+  Restarting Horizon (`php artisan horizon:terminate`) is now always a clean
+  reset of the loops; the `monitoring:dispatcher:initialized` cache flag is
+  no longer used.
+
 
 - **Security: webhook and ntfy URLs must now resolve to public addresses.**
   Generic webhook URLs and self-hosted ntfy server URLs could previously
