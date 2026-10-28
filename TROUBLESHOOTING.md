@@ -10,10 +10,10 @@ All commands assume you're in the project directory (`cd ~/easymonitor`).
 
 | Problem | First command to run |
 |---------|---------------------|
-| 500 error on any page | `docker compose exec php tail -n 80 storage/logs/laravel.log` |
+| 500 error on any page | `docker compose exec php sh -c 'tail -n 80 $(ls -t storage/logs/laravel*.log | head -1)'` |
 | Page loads blank (no output) | Set `APP_DEBUG=true` in `.env`, then `docker compose exec php php artisan config:clear` |
 | Container won't stay up | `docker compose logs <service> --tail 50` |
-| Monitors never change from "Pending" | `docker compose exec php tail -n 40 storage/logs/laravel.log \| grep -iE "dispatched\|processed"` |
+| Monitors never change from "Pending" | `docker compose exec php sh -c 'tail -n 40 $(ls -t storage/logs/laravel*.log | head -1)' \| grep -iE "dispatched\|processed"` |
 | App-level system check | Log in, then visit `/healthz` — shows DB, Redis, monitoring loop, probe status |
 
 ---
@@ -161,43 +161,38 @@ docker compose exec redis redis-cli -a "$REDIS_PW" --no-auth-warning XLEN result
 docker compose exec redis redis-cli -a "$REDIS_PW" --no-auth-warning XINFO GROUPS results
 
 # 6. Is the monitoring loop alive?
-docker compose exec php tail -n 40 storage/logs/laravel.log | grep -iE "dispatched|processed|bootstrapped"
+docker compose exec php sh -c 'tail -n 40 $(ls -t storage/logs/laravel*.log | head -1)' | grep -iE "dispatched|processed|bootstrapped"
 ```
 
 You should see recurring log entries like `DispatchMonitorChecks: Dispatched 1 monitor check(s)` every 30s and `ProcessMonitorResults: Processed N result(s)` every few seconds.
 
 ### Missing: "Monitoring dispatcher bootstrapped" in logs
 
-**Cause:** the `MonitoringServiceProvider` didn't kick off the self-requeuing jobs. Usually because Horizon failed to start the first time and the one-shot bootstrap was skipped.
+**Cause:** the monitoring loops are started by the Horizon master process every time it boots. If that message is missing, Horizon is not running (check `docker compose exec php tail -n 50 storage/logs/horizon.log`) or failed while starting the loops.
 
-**Fix:**
+**Fix:** restart Horizon. Every start launches fresh loops and retires any leftover ones, so this is always safe:
 
 ```bash
-# Clear the bootstrap flag so the provider re-dispatches on next Horizon boot
-REDIS_PW=$(grep '^REDIS_PASSWORD=' .env | cut -d= -f2)
-docker compose exec redis redis-cli -a "$REDIS_PW" --no-auth-warning DEL easymonitor_cache:monitoring:dispatcher:initialized
-
-# Restart php so Horizon reboots and triggers the provider
-docker compose restart php
+docker compose exec php php artisan horizon:terminate   # supervisord restarts it
 sleep 15
 
 # Confirm
-docker compose exec php tail -n 30 storage/logs/laravel.log | grep -iE "bootstrapped|dispatched"
+docker compose exec php sh -c 'tail -n 30 $(ls -t storage/logs/laravel*.log | head -1)' | grep -iE "bootstrapped|dispatched"
 ```
 
 ### Manually kick off the jobs
 
-If the automatic bootstrap keeps failing, dispatch the initial pair by hand:
+If Horizon is running but the loops still do not start, start them by hand:
 
 ```bash
 docker compose exec php php artisan tinker --execute='
-  dispatch(new \App\Jobs\MonitoringEngine\DispatchMonitorChecks);
-  dispatch(new \App\Jobs\MonitoringEngine\ProcessMonitorResults);
-  echo "dispatched\n";
+  \App\Jobs\MonitoringEngine\DispatchMonitorChecks::startLoop();
+  \App\Jobs\MonitoringEngine\ProcessMonitorResults::startLoop();
+  echo "started\n";
 '
 ```
 
-These are self-requeuing — once started they'll keep running on their own.
+These are self-requeuing — once started they keep running on their own, and starting them again replaces the running loop instead of adding a second one.
 
 ### Force an immediate check on a specific monitor
 
@@ -273,7 +268,7 @@ docker compose exec redis redis-cli -a "$REDIS_PW" --no-auth-warning XGROUP DEST
 grep '^MAIL_MAILER=' .env
 ```
 
-- `log` — emails written to `storage/logs/laravel.log`. Not actually sent. Change to `ses` or `smtp` and set credentials.
+- `log` — emails written to the Laravel log in `storage/logs/`. Not actually sent. Change to `ses` or `smtp` and set credentials.
 - `ses` — make sure `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION` are set, and `MAIL_FROM_ADDRESS` is on a verified SES identity. If in sandbox, can only send to verified recipients.
 - `smtp` — test with:
   ```bash
@@ -335,9 +330,8 @@ Sometimes the loop gets "stuck" (e.g. after a long container pause). Hard reset:
 ```bash
 REDIS_PW=$(grep '^REDIS_PASSWORD=' .env | cut -d= -f2)
 
-# Clear bootstrap flag and any stale locks
+# Clear any stale locks
 docker compose exec redis redis-cli -a "$REDIS_PW" --no-auth-warning DEL \
-  easymonitor_cache:monitoring:dispatcher:initialized \
   easymonitor_laravel_cache_monitor:dispatch-checks:lock \
   easymonitor_laravel_cache_monitor:process-results:lock
 
@@ -396,6 +390,6 @@ echo "=== horizon ===" && docker compose exec php php artisan horizon:status
 echo "=== redis streams ===" && \
   docker compose exec redis redis-cli -a "$REDIS_PW" --no-auth-warning XLEN checks && \
   docker compose exec redis redis-cli -a "$REDIS_PW" --no-auth-warning XLEN results
-echo "=== recent laravel errors ===" && docker compose exec php tail -n 40 storage/logs/laravel.log | grep -iE "error|exception" || echo "(none)"
+echo "=== recent laravel errors ===" && docker compose exec php sh -c 'tail -n 40 $(ls -t storage/logs/laravel*.log | head -1)' | grep -iE "error|exception" || echo "(none)"
 echo "=== probe logs ===" && docker compose logs probe --tail 10
 ```

@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Log;
 class ProcessMonitorResults implements ShouldQueue
 {
     use Queueable;
+    use RunsAsSingleLoop;
 
     /**
      * The number of seconds the job can run before timing out
@@ -52,10 +53,17 @@ class ProcessMonitorResults implements ShouldQueue
 
     /**
      * Create a new job instance
+     *
+     * @param  ?string  $loopId  The chain this job belongs to (see RunsAsSingleLoop)
      */
-    public function __construct()
+    public function __construct(public ?string $loopId = null)
     {
         $this->onQueue('monitoring');
+    }
+
+    protected static function loopKey(): string
+    {
+        return 'monitor:process-results:loop';
     }
 
     /**
@@ -63,6 +71,10 @@ class ProcessMonitorResults implements ShouldQueue
      */
     public function handle(ResultConsumer $consumer): void
     {
+        if (! $this->isCurrentLoop()) {
+            return;
+        }
+
         // Acquire lock to prevent duplicate jobs
         $lock = Cache::lock(self::LOCK_KEY, self::LOCK_DURATION);
 
@@ -100,7 +112,7 @@ class ProcessMonitorResults implements ShouldQueue
      */
     private function requeueJob(): void
     {
-        dispatch(new self)->delay(now()->addSeconds(self::REQUEUE_DELAY));
+        dispatch(new self($this->loopId))->delay(now()->addSeconds(self::REQUEUE_DELAY));
     }
 
     /**
@@ -114,6 +126,8 @@ class ProcessMonitorResults implements ShouldQueue
         ]);
 
         // Requeue even on failure to keep the loop running
-        $this->requeueJob();
+        if ($this->isCurrentLoop()) {
+            $this->requeueJob();
+        }
     }
 }
