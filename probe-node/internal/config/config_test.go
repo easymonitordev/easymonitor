@@ -21,6 +21,7 @@ func TestLoadFromEnv_Success(t *testing.T) {
 	assert.Equal(t, "test-token", cfg.JWTToken)
 	assert.Equal(t, "redis://redis:6379/0", cfg.RedisURL) // Default
 	assert.Equal(t, "checks", cfg.CheckStream)
+	assert.Equal(t, 2*time.Minute, cfg.MaxCheckAge)
 	assert.Equal(t, "results", cfg.ResultStream)
 }
 
@@ -49,6 +50,7 @@ func TestLoadFromEnv_CustomValues(t *testing.T) {
 	os.Setenv("REDIS_PASSWORD", "mypassword")
 	os.Setenv("DEFAULT_TIMEOUT", "60s")
 	os.Setenv("BATCH_SIZE", "20")
+	os.Setenv("MAX_CHECK_AGE", "5m")
 	os.Setenv("MAX_CONCURRENCY", "5")
 	os.Setenv("HEALTH_CHECK_PORT", "9090")
 	defer os.Clearenv()
@@ -61,6 +63,7 @@ func TestLoadFromEnv_CustomValues(t *testing.T) {
 	// Go normalizes 60s to 1m0s
 	assert.Equal(t, 60*time.Second, cfg.DefaultTimeout)
 	assert.Equal(t, 20, cfg.BatchSize)
+	assert.Equal(t, 5*time.Minute, cfg.MaxCheckAge)
 	assert.Equal(t, 5, cfg.MaxConcurrency)
 	assert.Equal(t, 9090, cfg.HealthCheckPort)
 }

@@ -90,6 +90,7 @@ All configuration is done via environment variables:
 | `REDIS_PASSWORD` | No | - | Redis password (if required) |
 | `DEFAULT_TIMEOUT` | No | `30s` | Default timeout for checks |
 | `BATCH_SIZE` | No | `10` | Number of checks to process per batch |
+| `MAX_CHECK_AGE` | No | `2m` | Checks older than this are skipped, so a probe that falls behind catches up instead of reporting stale results |
 | `MAX_CONCURRENCY` | No | `10` | Maximum concurrent checks |
 | `HEALTH_CHECK_PORT` | No | `8080` | Port for health check endpoints |
 | `PROBE_TAGS` | No | - | Comma-separated tags for this probe |

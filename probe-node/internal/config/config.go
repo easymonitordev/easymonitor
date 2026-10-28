@@ -28,6 +28,10 @@ type Config struct {
 	ConsumerName  string
 	BlockTimeout  time.Duration
 	BatchSize     int
+	// MaxCheckAge is how old a check may be before it is skipped instead of
+	// run. A probe that falls behind would otherwise report stale results
+	// against rounds the server dispatched long ago.
+	MaxCheckAge time.Duration
 
 	// Check configuration
 	DefaultTimeout time.Duration
@@ -45,6 +49,7 @@ func LoadFromEnv() (*Config, error) {
 		ResultStream:    "results",
 		BlockTimeout:    5 * time.Second,
 		BatchSize:       10,
+		MaxCheckAge:     2 * time.Minute,
 		DefaultTimeout:  30 * time.Second,
 		MaxConcurrency:  10,
 		HealthCheckPort: 8080,
@@ -95,6 +100,14 @@ func LoadFromEnv() (*Config, error) {
 			return nil, fmt.Errorf("invalid DEFAULT_TIMEOUT: %w", err)
 		}
 		cfg.DefaultTimeout = d
+	}
+
+	if maxAge := os.Getenv("MAX_CHECK_AGE"); maxAge != "" {
+		d, err := time.ParseDuration(maxAge)
+		if err != nil {
+			return nil, fmt.Errorf("invalid MAX_CHECK_AGE: %w", err)
+		}
+		cfg.MaxCheckAge = d
 	}
 
 	if batchSize := os.Getenv("BATCH_SIZE"); batchSize != "" {
