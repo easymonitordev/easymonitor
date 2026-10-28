@@ -42,15 +42,26 @@ they do not understand, so updating the server first is safe.
 
 ## Version-specific notes
 
-### Unreleased
+### v0.3.1
 
+- **Security: webhook and ntfy URLs must now resolve to public addresses.**
+  Generic webhook URLs and self-hosted ntfy server URLs could previously
+  point at loopback, private-network or cloud metadata addresses, letting
+  any logged-in user make this server send requests into its own network.
+  These URLs are now checked when saved and again on every delivery, and
+  deliveries no longer follow redirects. Existing channels that point at a
+  private address stop delivering (a warning is logged). If you notify
+  services on your own LAN, such as a self-hosted ntfy server, set
+  `EASYMONITOR_ALLOW_PRIVATE_NOTIFICATION_TARGETS=true`. Link-local
+  addresses, including `169.254.169.254`, stay blocked either way.
 - **Redis memory is now bounded.** The `checks` and `results` streams were
   never trimmed and could grow to gigabytes. Redis then takes long enough to
   load on restart that Horizon fails to start and supervisord gives up,
   which stops all monitoring. An hourly `easymonitor:prune-streams` task now
   trims both streams (`EASYMONITOR_STREAM_MAX_LENGTH`, default 10000) and
-  removes idle result consumers. The first hourly run frees the existing
-  backlog; to free it right away, run
+  removes idle result consumers, including the millions some installs
+  accumulated from a per-process consumer leak. The first hourly run frees
+  the existing backlog; to free it right away, run
   `docker compose exec php php artisan easymonitor:prune-streams`.
 - Horizon now retries for about three and a half minutes when Redis is not
   ready yet, and the php and probe containers wait for Redis to finish
