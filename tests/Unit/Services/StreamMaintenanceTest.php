@@ -29,6 +29,9 @@ it('keeps trimming until a large backlog is gone', function () {
 it('deletes only result consumers idle longer than the threshold', function () {
     config(['easymonitor.streams.consumer_idle_minutes' => 60]);
 
+    Redis::shouldReceive('xinfo')->with('GROUPS', 'results')->andReturn([
+        ['name' => 'result-processors', 'consumers' => 3, 'last-delivered-id' => '5-0'],
+    ]);
     Redis::shouldReceive('xinfo')
         ->with('CONSUMERS', ResultConsumer::STREAM_RESULTS, ResultConsumer::CONSUMER_GROUP)
         ->andReturn([
@@ -48,6 +51,19 @@ it('deletes nothing when the results stream has no consumer group yet', function
     Redis::shouldReceive('xgroup')->never();
 
     expect((new StreamMaintenance)->pruneIdleResultConsumers())->toBe(0);
+});
+
+it('recreates an oversized group at its last delivered position instead of listing it', function () {
+    Redis::shouldReceive('xinfo')->with('GROUPS', 'results')->andReturn([
+        ['name' => 'some-other-group', 'consumers' => 1, 'last-delivered-id' => '1-0'],
+        ['name' => 'result-processors', 'consumers' => 1466482, 'last-delivered-id' => '1793177753468-0'],
+    ]);
+    Redis::shouldReceive('xinfo')->with('CONSUMERS', 'results', 'result-processors')->never();
+
+    Redis::shouldReceive('xgroup')->once()->ordered()->with('DESTROY', 'results', 'result-processors');
+    Redis::shouldReceive('xgroup')->once()->ordered()->with('CREATE', 'results', 'result-processors', '1793177753468-0');
+
+    expect((new StreamMaintenance)->pruneIdleResultConsumers())->toBe(1466482);
 });
 
 it('reads results under the same consumer name from every worker process', function () {

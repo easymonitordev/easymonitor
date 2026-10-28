@@ -33,7 +33,7 @@ class ProcessMonitorResults implements ShouldQueue
     /**
      * The lock key to prevent duplicate jobs
      */
-    private const LOCK_KEY = 'monitor:process-results:lock';
+    public const LOCK_KEY = 'monitor:process-results:lock';
 
     /**
      * The lock duration in seconds
