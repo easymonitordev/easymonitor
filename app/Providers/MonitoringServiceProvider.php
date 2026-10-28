@@ -14,19 +14,13 @@ use Illuminate\Support\ServiceProvider;
 /**
  * Monitoring Service Provider
  *
- * Automatically starts the monitoring system by dispatching the initial
- * DispatchMonitorChecks and ProcessMonitorResults jobs when Horizon/queue workers boot.
- *
- * To restart the monitoring loop, run:
- * php artisan cache:forget monitoring:dispatcher:initialized
+ * Starts the monitoring loops (DispatchMonitorChecks and ProcessMonitorResults)
+ * every time the Horizon master process boots. Starting a loop retires any
+ * chain left over from before, so restarting Horizon is always a clean reset:
+ * php artisan horizon:terminate
  */
 class MonitoringServiceProvider extends ServiceProvider
 {
-    /**
-     * The cache key for the initialization flag
-     */
-    private const INIT_KEY = 'monitoring:dispatcher:initialized';
-
     /**
      * Bootstrap services.
      *
@@ -42,11 +36,13 @@ class MonitoringServiceProvider extends ServiceProvider
             return;
         }
 
-        // Skip trivial artisan invocations that shouldn't kick off the loop.
-        // Only the `horizon` and `horizon:work*` commands should bootstrap.
+        // Only the Horizon master process starts the loops. Its supervisors
+        // and workers (horizon:supervisor, horizon:work) and other horizon:*
+        // commands such as the scheduled horizon:snapshot must not, or every
+        // worker spawn would restart the loops.
         $argv = $_SERVER['argv'] ?? [];
         $command = $argv[1] ?? '';
-        if (! str_starts_with($command, 'horizon')) {
+        if ($command !== 'horizon') {
             return;
         }
 
@@ -57,8 +53,7 @@ class MonitoringServiceProvider extends ServiceProvider
     }
 
     /**
-     * Dispatch the initial self-requeuing jobs, guarded by a cache flag so
-     * we only bootstrap once per Horizon lifecycle.
+     * Start a fresh chain of each self-requeuing job, retiring older chains
      */
     private function bootstrapMonitoringLoop(): void
     {
@@ -70,14 +65,8 @@ class MonitoringServiceProvider extends ServiceProvider
             }
 
             try {
-                if (Cache::has(self::INIT_KEY)) {
-                    return;
-                }
-
-                dispatch(new DispatchMonitorChecks);
-                dispatch(new ProcessMonitorResults);
-
-                Cache::forever(self::INIT_KEY, true);
+                DispatchMonitorChecks::startLoop();
+                ProcessMonitorResults::startLoop();
 
                 Log::info('Monitoring dispatcher and result processor bootstrapped');
             } finally {
