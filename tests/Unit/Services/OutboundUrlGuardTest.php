@@ -91,6 +91,8 @@ it('returns no request for a blocked url', function () {
     expect(app(OutboundUrlGuard::class)->request('http://169.254.169.254/'))->toBeNull();
 });
 
-it('expands shorthand ipv4 notations to the address curl would connect to', function (string $host) {
-    expect((new HostResolver)->resolve($host))->toBe(['127.0.0.1']);
-})->with(['127.1', '2130706433', '0x7f.1', '0177.0.0.1']);
+it('never allows shorthand ipv4 notations of internal addresses with real dns', function (string $host) {
+    $guard = new OutboundUrlGuard(new HostResolver);
+
+    expect($guard->isAllowed("http://{$host}/"))->toBeFalse();
+})->with(['127.1', '2130706433', '0x7f.1', '0177.0.0.1', '0xa9fea9fe']);
