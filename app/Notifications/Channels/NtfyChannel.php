@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Notifications\Channels;
 
+use App\Services\OutboundUrlGuard;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Notifications\Notification;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -15,10 +15,13 @@ use Illuminate\Support\Facades\Log;
  * Each notification class provides the message via toNtfy($notifiable)
  * (title, message, priority, tags, click) and the notifiable resolves the
  * server URL, topic, and optional access token via
- * routeNotificationFor('ntfy').
+ * routeNotificationFor('ntfy'). The server URL must resolve to a public
+ * address (see OutboundUrlGuard).
  */
 class NtfyChannel
 {
+    public function __construct(private OutboundUrlGuard $guard) {}
+
     public function send(object $notifiable, Notification $notification): void
     {
         if (! method_exists($notification, 'toNtfy')) {
@@ -39,10 +42,18 @@ class NtfyChannel
             return;
         }
 
-        $request = Http::asJson()->timeout(10);
-        $request = $this->withAuthorization($request, $route);
+        $server = rtrim($server, '/');
+        $request = $this->guard->request($server);
 
-        $response = $request->post(rtrim($server, '/'), array_merge(
+        if ($request === null) {
+            Log::warning('ntfy delivery blocked: the server URL does not resolve to a public address', ['server' => $server]);
+
+            return;
+        }
+
+        $request = $this->withAuthorization($request->asJson()->timeout(10), $route);
+
+        $response = $request->post($server, array_merge(
             ['topic' => $topic],
             $payload,
         ));

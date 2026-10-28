@@ -303,6 +303,50 @@ test('webhook channel rejects non-http(s) urls', function () {
         ->assertHasErrors(['newWebhookUrl']);
 });
 
+test('webhook channel rejects urls that point at internal addresses', function (string $url) {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->set('newWebhookLabel', 'Internal')
+        ->set('newWebhookUrl', $url)
+        ->call('addWebhookChannel')
+        ->assertHasErrors(['newWebhookUrl']);
+
+    expect($user->notificationChannels()->where('type', NotificationChannelType::Webhook->value)->exists())->toBeFalse();
+})->with([
+    'http://169.254.169.254/latest/meta-data/',
+    'http://127.0.0.1:8080/',
+    'http://192.168.1.1/admin',
+]);
+
+test('editing a webhook channel cannot point it at an internal address', function () {
+    $user = User::factory()->create();
+    $existing = NotificationChannel::factory()->for($user)->webhook('https://example.com/hook')->create();
+    $this->actingAs($user);
+
+    $this->fakeDns(['metadata.example.com' => ['169.254.169.254']]);
+
+    Livewire::test(Notifications::class)
+        ->set("webhookEdits.{$existing->id}.url", 'http://metadata.example.com/latest/meta-data/')
+        ->call('saveWebhookChannel', $existing->id)
+        ->assertHasErrors(["webhookEdits.{$existing->id}.url"]);
+
+    expect($existing->refresh()->config['url'])->toBe('https://example.com/hook');
+});
+
+test('ntfy channel rejects a server url on an internal address', function () {
+    $user = User::factory()->create();
+    $this->actingAs($user);
+
+    Livewire::test(Notifications::class)
+        ->set('newNtfyLabel', 'Phone')
+        ->set('newNtfyServerUrl', 'http://127.0.0.1:2586')
+        ->set('newNtfyTopic', 'alerts')
+        ->call('addNtfyChannel')
+        ->assertHasErrors(['newNtfyServerUrl']);
+});
+
 test('saving a webhook channel preserves the signing secret', function () {
     $user = User::factory()->create();
     $existing = NotificationChannel::factory()->for($user)->webhook(secret: str_repeat('o', 64))->create();
