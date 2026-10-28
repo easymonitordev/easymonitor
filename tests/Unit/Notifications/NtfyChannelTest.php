@@ -89,3 +89,28 @@ test('isConfigured only requires a topic — the server defaults to ntfy.sh', fu
     expect($channel->fresh()->isConfigured())->toBeTrue()
         ->and($channel->fresh()->routeNotificationForNtfy()['server_url'])->toBe('https://ntfy.sh');
 });
+
+test('ntfy servers on internal addresses are never contacted', function () {
+    Http::fake();
+
+    $user = User::factory()->create();
+    $channel = NotificationChannel::factory()->for($user)->ntfy('alerts', 'http://169.254.169.254/latest/meta-data')->create();
+    $monitor = Monitor::factory()->for($user)->create();
+
+    NotificationFacade::sendNow([$channel], new MonitorDown($monitor, 'timeout'));
+
+    Http::assertNothingSent();
+});
+
+test('a self-hosted ntfy server on the lan is used when private targets are allowed', function () {
+    Http::fake();
+    config(['easymonitor.outbound.allow_private_networks' => true]);
+
+    $user = User::factory()->create();
+    $channel = NotificationChannel::factory()->for($user)->ntfy('alerts', 'http://192.168.1.20:2586')->create();
+    $monitor = Monitor::factory()->for($user)->create();
+
+    NotificationFacade::sendNow([$channel], new MonitorDown($monitor, 'timeout'));
+
+    Http::assertSent(fn ($request) => $request->url() === 'http://192.168.1.20:2586');
+});
