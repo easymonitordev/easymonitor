@@ -48,6 +48,24 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Outbound Notification Targets
+    |--------------------------------------------------------------------------
+    |
+    | Generic webhooks and self-hosted ntfy servers may only point at publicly
+    | routable addresses, so users cannot make this server send requests into
+    | its own network. Set EASYMONITOR_ALLOW_PRIVATE_NOTIFICATION_TARGETS=true
+    | if trusted users need to notify services on your LAN (loopback, private
+    | and CGNAT ranges). Link-local addresses such as the cloud metadata
+    | endpoint 169.254.169.254 stay blocked either way.
+    |
+    */
+
+    'outbound' => [
+        'allow_private_networks' => (bool) env('EASYMONITOR_ALLOW_PRIVATE_NOTIFICATION_TARGETS', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Check Result Retention
     |--------------------------------------------------------------------------
     |

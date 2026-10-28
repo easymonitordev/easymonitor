@@ -8,6 +8,8 @@ use App\Enums\NotificationChannelType;
 use App\Models\Monitor;
 use App\Models\NotificationChannel;
 use App\Notifications\MonitorRecovered;
+use App\Services\OutboundUrlGuard;
+use Closure;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
@@ -719,11 +721,11 @@ class Notifications extends Component
     }
 
     /**
-     * @return array<int, string>
+     * @return array<int, string|Closure>
      */
     protected function ntfyServerRules(): array
     {
-        return ['required', 'string', 'url', 'starts_with:https://,http://', 'max:200'];
+        return ['required', 'string', 'url', 'starts_with:https://,http://', 'max:200', $this->publicUrlRule()];
     }
 
     /**
@@ -753,11 +755,25 @@ class Notifications extends Component
     }
 
     /**
-     * @return array<int, string>
+     * @return array<int, string|Closure>
      */
     protected function webhookUrlRules(): array
     {
-        return ['required', 'string', 'url', 'starts_with:https://,http://', 'max:500'];
+        return ['required', 'string', 'url', 'starts_with:https://,http://', 'max:500', $this->publicUrlRule()];
+    }
+
+    /**
+     * Rejects URLs whose host resolves to a loopback, private, link-local or
+     * otherwise non-public address, so users cannot aim notifications at
+     * this server's internal network. Delivery re-checks the address.
+     */
+    protected function publicUrlRule(): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail): void {
+            if (is_string($value) && ! app(OutboundUrlGuard::class)->isAllowed($value)) {
+                $fail(__('This URL must resolve to a public internet address.'));
+            }
+        };
     }
 
     protected function refreshWebhookEdits(): void

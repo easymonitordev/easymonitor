@@ -89,3 +89,33 @@ test('a webhook channel without a secret is skipped', function () {
 
     Http::assertNothingSent();
 });
+
+test('webhooks aimed at internal addresses are never sent', function (string $url) {
+    Http::fake();
+
+    $user = User::factory()->create();
+    $channel = NotificationChannel::factory()->for($user)->webhook($url)->create();
+    $monitor = Monitor::factory()->for($user)->create();
+
+    NotificationFacade::sendNow([$channel], new MonitorDown($monitor, 'timeout'));
+
+    Http::assertNothingSent();
+})->with([
+    'http://169.254.169.254/latest/meta-data/',
+    'http://127.0.0.1:6379/',
+    'http://10.0.0.5/hook',
+]);
+
+test('a webhook host that later resolves to an internal address is not sent', function () {
+    Http::fake();
+
+    $user = User::factory()->create();
+    $channel = NotificationChannel::factory()->for($user)->webhook('https://rebind.example.com/hook')->create();
+    $monitor = Monitor::factory()->for($user)->create();
+
+    $this->fakeDns(['rebind.example.com' => ['169.254.169.254']]);
+
+    NotificationFacade::sendNow([$channel], new MonitorDown($monitor, 'timeout'));
+
+    Http::assertNothingSent();
+});
